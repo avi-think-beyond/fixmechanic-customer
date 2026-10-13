@@ -1,0 +1,111 @@
+<resources>
+    <string name="app_name">FixMechanic Customer</string>
+    <string name="brand_tagline">Emergency vehicle help, made simple.</string>
+    
+    <!-- Onboarding -->
+    <string name="onboarding_title_1">Fast Roadside Dispatch</string>
+    <string name="onboarding_desc_1">Stranded on the road? Connect with verified mechanics within minutes across India.</string>
+    <string name="onboarding_title_2">Bikes &amp; Cars Covered</string>
+    <string name="onboarding_desc_2">From punctures and jump-starts to towing and engine repairs, we cover all emergencies.</string>
+    <string name="onboarding_title_3">Upfront &amp; Transparent</string>
+    <string name="onboarding_desc_3">Clear estimates, no hidden charges, and private calling to keep your personal data secure.</string>
+    <string name="btn_get_started">Get Started</string>
+    <string name="btn_skip">Skip</string>
+    <string name="btn_next">Next</string>
+
+    <!-- Auth -->
+    <string name="auth_title">Enter Phone Number</string>
+    <string name="auth_subtitle">We will send a 6-digit OTP to verify your account</string>
+    <string name="phone_placeholder">98765 43210</string>
+    <string name="btn_send_otp">Send OTP</string>
+    <string name="otp_title">Verify OTP</string>
+    <string name="otp_subtitle">Enter the 6-digit verification code sent to</string>
+    <string name="btn_verify">Verify &amp; Continue</string>
+    <string name="resend_otp">Resend OTP</string>
+    <string name="resend_otp_in">Resend OTP in %1$ds</string>
+    <string name="privacy_note">Your phone number is kept private and never shared with mechanics.</string>
+
+    <!-- Home -->
+    <string name="emergency_help_title">TAP FOR EMERGENCY HELP</string>
+    <string name="emergency_help_subtitle">Immediate mechanic dispatch to your live location</string>
+    <string name="quick_select_vehicle">Select Vehicle Type</string>
+    <string name="vehicle_bike">Motorcycle / Scooter</string>
+    <string name="vehicle_car">Car / SUV</string>
+    <string name="ai_diagnoser_title">Smart AI Issue Diagnosis</string>
+    <string name="ai_diagnoser_desc">Unsure of the issue? Type your problem and get an instant service suggestion.</string>
+    <string name="helpline_banner">24x7 National Roadside Helpline: 1800-349-4357 (1800-FIX-HELP)</string>
+    
+    <!-- Services -->
+    <string name="select_service_title">Select Emergency Service</string>
+    <string name="service_flat_tyre_bike">Flat tyre / puncture</string>
+    <string name="service_battery_jump_bike">Battery jump-start</string>
+    <string name="service_not_starting_bike">Bike not starting</string>
+    <string name="service_chain_issue">Chain issue</string>
+    <string name="service_clutch_cable">Clutch cable issue</string>
+    <string name="service_brake_issue">Brake issue</string>
+    <string name="service_fuel_delivery">Emergency fuel delivery</string>
+    <string name="service_electrical_issue">Electrical issue</string>
+    <string name="service_minor_repair">Minor mechanical repair</string>
+    <string name="service_towing">Towing assistance</string>
+
+    <string name="service_flat_tyre_car">Flat tyre / spare replacement</string>
+    <string name="service_battery_jump_car">Battery jump-start</string>
+    <string name="service_not_starting_car">Car not starting</string>
+    <string name="service_engine_overheating">Engine overheating</string>
+    <string name="service_lockout">Lockout assistance</string>
+
+    <!-- Location -->
+    <string name="location_screen_title">Confirm Breakdown Location</string>
+    <string name="location_permission_needed">GPS Location Access Required</string>
+    <string name="location_permission_desc">Allow location access so our mechanics can pinpoint your breakdown location on the map.</string>
+    <string name="btn_allow_location">Use Current Location</string>
+    <string name="btn_manual_address">Enter Address Manually</string>
+    <string name="address_landmark_label">Nearby Landmark (Dhaba, Toll, Metro pillar, Petrol Pump)</string>
+
+    <!-- Details -->
+    <string name="vehicle_details_title">Vehicle &amp; Issue Details</string>
+    <string name="vehicle_make_model_label">Vehicle Make &amp; Model (e.g., Honda Activa, Swift, Royal Enfield)</string>
+    <string name="vehicle_reg_number_label">Registration Number (Optional, e.g. DL 01 AB 1234)</string>
+    <string name="issue_description_label">Describe what happened</string>
+    <string name="issue_description_placeholder">e.g. Engine made a loud clunking noise and smoke appeared from the hood...</string>
+
+    <!-- Summary -->
+    <string name="summary_title">Request Summary</string>
+    <string name="safety_guidelines_title">Safety First Guidelines</string>
+    <string name="safety_guideline_1">Turn on hazard hazard/blinkers immediately</string>
+    <string name="safety_guideline_2">Step out safely and stand behind highway crash barriers</string>
+    <string name="btn_confirm_dispatch">Confirm &amp; Find Mechanic</string>
+
+    <!-- Dispatch & Search -->
+    <string name="searching_mechanic_title">Locating Nearest Mechanics</string>
+    <string name="searching_mechanic_desc">Reaching verified breakdown specialists within 5–7 km radius...</string>
+    <string name="btn_cancel_request">Cancel Request</string>
+
+    <!-- Mechanic Assigned -->
+    <string name="mechanic_assigned_title">Mechanic Assigned</string>
+    <string name="verified_partner">FixMechanic Verified Partner</string>
+    <string name="btn_call_mechanic">Private Call (Masked)</string>
+    <string name="btn_chat_mechanic">In-App Chat</string>
+    <string name="timeline_assigned">Assigned</string>
+    <string name="timeline_enroute">En Route</string>
+    <string name="timeline_arrived">Arrived</string>
+    <string name="timeline_in_progress">In Progress</string>
+    <string name="timeline_completed">Completed</string>
+
+    <!-- Chat -->
+    <string name="chat_title">Private Support Chat</string>
+    <string name="chat_encryption_notice">Private &amp; Secure. Your personal contact details are never shared.</string>
+    <string name="chat_input_placeholder">Type a message to mechanic...</string>
+
+    <!-- Completion & Rating -->
+    <string name="completion_title">Service Completed</string>
+    <string name="completion_subtitle">Mechanic has successfully resolved the issue</string>
+    <string name="rate_experience">Rate Your Experience</string>
+    <string name="btn_submit_feedback">Submit Feedback</string>
+
+    <!-- History & Profile -->
+    <string name="nav_home">Home</string>
+    <string name="nav_activity">Activity</string>
+    <string name="nav_profile">Profile</string>
+    <string name="backend_status_title">Backend &amp; Cloud Integration Status</string>
+</resources>

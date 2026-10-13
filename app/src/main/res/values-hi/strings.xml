@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FixMechanic Customer</string>
+    <string name="brand_tagline">आपातकालीन वाहन सहायता, अब हुई आसान।</string>
+    
+    <!-- Onboarding -->
+    <string name="onboarding_title_1">तेज़ ऑन-रोड सहायता</string>
+    <string name="onboarding_desc_1">सड़क पर फंसे हैं? भारत भर में कुछ ही मिनटों में सत्यापित मैकेनिक से जुड़ें।</string>
+    <string name="onboarding_title_2">बाइक और कार दोनों के लिए</string>
+    <string name="onboarding_desc_2">पंचर, बैटरी जंप-स्टार्ट से लेकर टोइंग और इंजन मरम्मत तक, सभी आपात स्थिति का समाधान।</string>
+    <string name="onboarding_title_3">पारदर्शी और सुरक्षित</string>
+    <string name="onboarding_desc_3">स्पष्ट अनुमान, कोई छुपा शुल्क नहीं, और आपका मोबाइल नंबर पूरी तरह सुरक्षित।</string>
+    <string name="btn_get_started">शुरू करें</string>
+    <string name="btn_skip">छोड़ें</string>
+    <string name="btn_next">आगे बढ़ें</string>
+
+    <!-- Auth -->
+    <string name="auth_title">मोबाइल नंबर दर्ज करें</string>
+    <string name="auth_subtitle">सत्यापन के लिए हम आपको 6 अंकों का OTP भेजेंगे</string>
+    <string name="phone_placeholder">98765 43210</string>
+    <string name="btn_send_otp">OTP भेजें</string>
+    <string name="otp_title">OTP सत्यापित करें</string>
+    <string name="otp_subtitle">भेजा गया 6 अंकों का कोड दर्ज करें:</string>
+    <string name="btn_verify">सत्यापित करें और आगे बढ़ें</string>
+    <string name="resend_otp">OTP दोबारा भेजें</string>
+    <string name="resend_otp_in">%1$d सेकंड में दोबारा भेजें</string>
+    <string name="privacy_note">आपका फोन नंबर निजी रहता है और मैकेनिक के साथ साझा नहीं किया जाता।</string>
+
+    <!-- Home -->
+    <string name="emergency_help_title">आपातकालीन सहायता के लिए दबाएं</string>
+    <string name="emergency_help_subtitle">तुरंत आपके स्थान पर मैकेनिक भेजा जाएगा</string>
+    <string name="quick_select_vehicle">वाहन का प्रकार चुनें</string>
+    <string name="vehicle_bike">मोटरसाइकिल / स्कूटर</string>
+    <string name="vehicle_car">कार / एसयूवी</string>
+    <string name="ai_diagnoser_title">स्मार्ट AI समस्या निदान</string>
+    <string name="ai_diagnoser_desc">समस्या समझ नहीं आ रही? बस लिखें और AI सही सेवा सुझाएगा।</string>
+    <string name="helpline_banner">24x7 राष्ट्रीय हेल्पलाइन: 1800-349-4357 (1800-FIX-HELP)</string>
+    
+    <!-- Services -->
+    <string name="select_service_title">आपातकालीन सेवा चुनें</string>
+    <string name="service_flat_tyre_bike">टायर पंचर / हवा की कमी</string>
+    <string name="service_battery_jump_bike">बैटरी जंप-स्टार्ट</string>
+    <string name="service_not_starting_bike">बाइक स्टार्ट नहीं हो रही</string>
+    <string name="service_chain_issue">चेन की समस्या</string>
+    <string name="service_clutch_cable">क्लच केबल टूटी / ढीली</string>
+    <string name="service_brake_issue">ब्रेक की समस्या</string>
+    <string name="service_fuel_delivery">आपातकालीन पेट्रोल/डीजल डिलीवरी</string>
+    <string name="service_electrical_issue">इलेक्ट्रिकल खराबी</string>
+    <string name="service_minor_repair">छोटी मैकेनिकल मरम्मत</string>
+    <string name="service_towing">टोइंग सेवा</string>
+
+    <string name="service_flat_tyre_car">टायर पंचर / स्टेपनी बदलना</string>
+    <string name="service_battery_jump_car">बैटरी जंप-स्टार्ट</string>
+    <string name="service_not_starting_car">कार स्टार्ट नहीं हो रही</string>
+    <string name="service_engine_overheating">इंजन गर्म होना / कूलेंट समस्या</string>
+    <string name="service_lockout">कार की चाबी अंदर बंद होना</string>
+
+    <!-- Location -->
+    <string name="location_screen_title">स्थान की पुष्टि करें</string>
+    <string name="location_permission_needed">GPS लोकेशन की अनुमति आवश्यक</string>
+    <string name="location_permission_desc">अनुमति दें ताकि मैकेनिक मानचित्र पर आपके सटीक स्थान तक पहुंच सके।</string>
+    <string name="btn_allow_location">वर्तमान स्थान का उपयोग करें</string>
+    <string name="btn_manual_address">पता खुद दर्ज करें</string>
+    <string name="address_landmark_label">पास का लैंडमार्क (ढाबा, टोल प्लाजा, पेट्रोल पंप आदि)</string>
+
+    <!-- Details -->
+    <string name="vehicle_details_title">वाहन और समस्या का विवरण</string>
+    <string name="vehicle_make_model_label">कंपनी और मॉडल (जैसे: Honda Activa, Swift, Royal Enfield)</string>
+    <string name="vehicle_reg_number_label">वाहन नंबर (वैकल्पिक)</string>
+    <string name="issue_description_label">क्या खराबी आई है?</string>
+    <string name="issue_description_placeholder">जैसे: अचानक इंजन बंद हुआ और धुंआ निकलने लगा...</string>
+
+    <!-- Summary -->
+    <string name="summary_title">अनुरोध सारांश</string>
+    <string name="safety_guidelines_title">सुरक्षा निर्देश</string>
+    <string name="safety_guideline_1">तुरंत हैजर्ड/ब्लिंकर लाइट चालू करें</string>
+    <string name="safety_guideline_2">गाड़ी से सुरक्षित बाहर निकलें और बैरियर के पीछे खड़े हों</string>
+    <string name="btn_confirm_dispatch">पुष्टि करें और मैकेनिक बुलाएं</string>
+
+    <!-- Dispatch & Search -->
+    <string name="searching_mechanic_title">नजदीकी मैकेनिक खोज रहे हैं</string>
+    <string name="searching_mechanic_desc">5–7 किमी के दायरे में मैकेनिकों से संपर्क किया जा रहा है...</string>
+    <string name="btn_cancel_request">अनुरोध रद्द करें</string>
+
+    <!-- Mechanic Assigned -->
+    <string name="mechanic_assigned_title">मैकेनिक नियुक्त हो गया है</string>
+    <string name="verified_partner">FixMechanic प्रमाणित पार्टनर</string>
+    <string name="btn_call_mechanic">कॉल करें (नंबर गुप्त)</string>
+    <string name="btn_chat_mechanic">चैट करें</string>
+    <string name="timeline_assigned">स्वीकृत</string>
+    <string name="timeline_enroute">रास्ते में</string>
+    <string name="timeline_arrived">पहुंच गए</string>
+    <string name="timeline_in_progress">कार्य प्रगति पर</string>
+    <string name="timeline_completed">संपन्न</string>
+
+    <!-- Chat -->
+    <string name="chat_title">सुरक्षित इन-ऐप चैट</string>
+    <string name="chat_encryption_notice">सुरक्षित और निजी। आपकी निजी जानकारी कभी साझा नहीं की जाती।</string>
+    <string name="chat_input_placeholder">मैकेनिक को संदेश लिखें...</string>
+
+    <!-- Completion & Rating -->
+    <string name="completion_title">सेवा पूरी हुई</string>
+    <string name="completion_subtitle">मैकेनिक ने समस्या का सफलतापूर्वक समाधान कर दिया है</string>
+    <string name="rate_experience">अनुभव का मूल्यांकन करें</string>
+    <string name="btn_submit_feedback">समीक्षा भेजें</string>
+
+    <!-- History & Profile -->
+    <string name="nav_home">होम</string>
+    <string name="nav_activity">गतिविधि</string>
+    <string name="nav_profile">प्रोफाइल</string>
+    <string name="backend_status_title">बैकएंड और क्लाउड एकीकरण स्थिति</string>
+</resources>
