@@ -1,0 +1,114 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidTimestamp(val) {
+      return val is timestamp && val <= request.time;
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        resource.data.role == 'mechanic'
+      );
+
+      // Customers can create their profile on registration with role 'customer'
+      allow create: if isOwner(userId) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.role == 'customer';
+
+      // Updates cannot alter user ID or elevate role
+      allow update: if isOwner(userId) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.role == resource.data.role;
+
+      allow delete: if false;
+    }
+
+    // --- Service Requests Collection ---
+    match /serviceRequests/{requestId} {
+      // Customer can read their own request; assigned mechanic can read; open requests can be scanned for dispatch
+      allow read: if isAuthenticated() && (
+        resource.data.customerId == request.auth.uid ||
+        resource.data.assignedMechanicId == request.auth.uid ||
+        resource.data.status in ['open', 'REQUESTED', 'SEARCHING']
+      );
+
+      // Customer can create service requests for themselves
+      allow create: if isAuthenticated() &&
+        request.resource.data.customerId == request.auth.uid &&
+        request.resource.data.status in ['open', 'REQUESTED', 'SEARCHING'];
+
+      // Owner customer can cancel or update notes/rating; assigned mechanic can update status
+      allow update: if isAuthenticated() && (
+        // Customer updates (e.g., cancel request, rating, or updating details)
+        (
+          resource.data.customerId == request.auth.uid &&
+          request.resource.data.customerId == request.auth.uid
+        ) ||
+        // Assigned mechanic updating progress
+        (
+          resource.data.assignedMechanicId == request.auth.uid &&
+          request.resource.data.customerId == resource.data.customerId
+        ) ||
+        // Mechanic self-assigning if previously unassigned
+        (
+          (resource.data.assignedMechanicId == null || resource.data.assignedMechanicId == '') &&
+          request.resource.data.assignedMechanicId == request.auth.uid &&
+          request.resource.data.customerId == resource.data.customerId
+        )
+      );
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read, create: if isAuthenticated();
+        allow update, delete: if false;
+      }
+    }
+
+    // --- Request Responses Collection ---
+    match /requestResponses/{responseId} {
+      allow read: if isAuthenticated();
+
+      allow create: if isAuthenticated() &&
+        request.resource.data.mechanicId == request.auth.uid;
+
+      allow update: if isAuthenticated() &&
+        (resource.data.mechanicId == request.auth.uid || request.auth.uid != null);
+
+      allow delete: if false;
+    }
+
+    // --- Request Events (Audit log) ---
+    match /requestEvents/{eventId} {
+      allow read: if isAuthenticated();
+
+      // Append-only audit logs
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // --- Reviews Collection ---
+    match /reviews/{reviewId} {
+      allow read: if isAuthenticated();
+
+      // Only the customer who received service can author a review
+      allow create: if isAuthenticated() &&
+        request.resource.data.customerId == request.auth.uid &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5;
+
+      allow update, delete: if false;
+    }
+  }
+}

@@ -13,6 +13,7 @@ import com.example.ui.theme.FixMechanicTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.di.ServiceLocator.init(this)
         enableEdgeToEdge()
         setContent {
             FixMechanicTheme {

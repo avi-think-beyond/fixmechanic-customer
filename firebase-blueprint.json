@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile document storing basic account and role information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "customerId": { "type": "string", "description": "Unique customer reference ID" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "phone": { "type": "string", "description": "User phone number" },
+        "email": { "type": "string", "description": "User email address" },
+        "role": { "type": "string", "enum": ["customer", "mechanic", "admin"], "description": "User role in the system" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Account update timestamp" }
+      },
+      "required": ["uid", "role"]
+    },
+    "ServiceRequest": {
+      "title": "ServiceRequest",
+      "description": "Roadside emergency assistance service request created by a customer",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "description": "UID of the customer who created the request" },
+        "vehicleType": { "type": "string", "description": "Vehicle type such as bike or car" },
+        "vehicleMakeModel": { "type": "string", "description": "Make and model of vehicle" },
+        "issueCategory": { "type": "string", "description": "Selected category of the issue" },
+        "description": { "type": "string", "description": "Details or notes regarding the breakdown" },
+        "location": { "type": "object", "description": "Geographical and textual address details" },
+        "status": { "type": "string", "description": "Current lifecycle state of the request" },
+        "assignedMechanicId": { "type": "string", "description": "Assigned mechanic UID or null" },
+        "assignedMechanicName": { "type": "string", "description": "Name of assigned mechanic" },
+        "assignedMechanicPhone": { "type": "string", "description": "Contact number or masked line for mechanic" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last status modification timestamp" }
+      },
+      "required": ["customerId", "vehicleType", "issueCategory", "status"]
+    },
+    "RequestResponse": {
+      "title": "RequestResponse",
+      "description": "Mechanic response or dispatch bid to an open service request",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "description": "ID of the associated service request" },
+        "mechanicId": { "type": "string", "description": "UID of responding mechanic" },
+        "mechanicName": { "type": "string", "description": "Mechanic name" },
+        "mechanicRating": { "type": "number", "description": "Mechanic rating score" },
+        "mechanicPhone": { "type": "string", "description": "Mechanic phone number" },
+        "estimatedArrivalMinutes": { "type": "number", "description": "Estimated arrival in minutes" },
+        "quoteAmount": { "type": "number", "description": "Estimated price or inspection charge in INR" },
+        "status": { "type": "string", "description": "Status of this response" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Response creation timestamp" }
+      },
+      "required": ["requestId", "mechanicId", "status"]
+    },
+    "RequestEvent": {
+      "title": "RequestEvent",
+      "description": "Audit and timeline event log for a service request",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "description": "Service request ID" },
+        "eventType": { "type": "string", "description": "Type of event" },
+        "message": { "type": "string", "description": "Human-readable status summary" },
+        "status": { "type": "string", "description": "Target status transition" },
+        "actorId": { "type": "string", "description": "UID of the user or system generating event" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Event timestamp" }
+      },
+      "required": ["requestId", "status"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "Customer post-service rating and feedback",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "description": "Service request ID" },
+        "customerId": { "type": "string", "description": "Customer UID who wrote review" },
+        "mechanicId": { "type": "string", "description": "Mechanic UID being reviewed" },
+        "rating": { "type": "number", "description": "Rating out of 5 stars" },
+        "comment": { "type": "string", "description": "Customer feedback text" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Review submission timestamp" }
+      },
+      "required": ["requestId", "customerId", "rating"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles with customer and mechanic role demarcation"
+    },
+    "/serviceRequests/{requestId}": {
+      "schema": "ServiceRequest",
+      "description": "Emergency service requests raised by customers"
+    },
+    "/requestResponses/{responseId}": {
+      "schema": "RequestResponse",
+      "description": "Mechanic responses to emergency requests"
+    },
+    "/requestEvents/{eventId}": {
+      "schema": "RequestEvent",
+      "description": "Status history log entries for service requests"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Customer service feedback ratings and comments"
+    }
+  }
+}

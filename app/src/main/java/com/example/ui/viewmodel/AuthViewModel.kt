@@ -114,6 +114,66 @@ class AuthViewModel(
         }
     }
 
+    fun signInWithGoogle(context: android.content.Context) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            try {
+                val credentialManager = androidx.credentials.CredentialManager.create(context)
+                val googleIdOption = com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption.Builder(
+                    context.getString(com.example.R.string.default_web_client_id)
+                ).build()
+
+                val request = androidx.credentials.GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
+
+                val result = credentialManager.getCredential(context = context, request = request)
+                val credential = result.credential
+
+                if (credential is androidx.credentials.CustomCredential &&
+                    credential.type == com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
+                ) {
+                    val googleIdTokenCredential = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.createFrom(credential.data)
+                    val idToken = googleIdTokenCredential.idToken
+                    val authResult = authRepository.signInWithGoogle(idToken)
+                    authResult.onSuccess {
+                        _uiState.update { it.copy(isLoading = false, isVerified = true, errorMessage = null) }
+                    }.onFailure { ex ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                errorMessage = ex.localizedMessage ?: "Firebase Sign-in failed."
+                            )
+                        }
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = "Unexpected credential format returned."
+                        )
+                    }
+                }
+            } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+                android.util.Log.w("AuthViewModel", "Sign-in cancelled by user", e)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Sign-in cancelled. Please select a Google account to continue."
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AuthViewModel", "Google sign-in error", e)
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = e.localizedMessage ?: "Google Sign-in failed. Please retry."
+                    )
+                }
+            }
+        }
+    }
+
     fun resetState() {
         timerJob?.cancel()
         _uiState.value = AuthUiState(isDemoMode = authRepository.isDemoMode)

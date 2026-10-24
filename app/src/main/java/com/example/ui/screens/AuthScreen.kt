@@ -282,6 +282,53 @@ fun AuthScreen(
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.HorizontalDivider(
+                            modifier = Modifier.weight(1f),
+                            color = Neutral300
+                        )
+                        Text(
+                            text = "  OR  ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Neutral500
+                        )
+                        androidx.compose.material3.HorizontalDivider(
+                            modifier = Modifier.weight(1f),
+                            color = Neutral300
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { authViewModel.signInWithGoogle(context) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .testTag("google_signin_button"),
+                        enabled = !state.isLoading,
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = PureWhite,
+                            contentColor = NavyDark
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, Neutral300)
+                    ) {
+                        Text(
+                            text = "G  Sign in with Google",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = NavyDark
+                            )
+                        )
+                    }
                 } else {
                     // OTP Verification Field
                     Text(

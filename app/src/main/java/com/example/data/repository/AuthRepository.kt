@@ -19,6 +19,7 @@ interface AuthRepository {
     val currentUserPhone: StateFlow<String?>
     val isDemoMode: Boolean
 
+    suspend fun signInWithGoogle(idToken: String): Result<Unit>
     suspend fun requestOtp(phoneNumber: String): Result<String>
     suspend fun verifyOtp(phoneNumber: String, otpCode: String): Result<Boolean>
     suspend fun logout()
@@ -91,6 +92,15 @@ class PrototypeAuthRepository : AuthRepository {
         _isLoggedIn.value = true
         _authState.value = AuthState.Authenticated(phoneNumber, isDemoAccount = true)
         return Result.success(true)
+    }
+
+    override suspend fun signInWithGoogle(idToken: String): Result<Unit> {
+        _authState.value = AuthState.Loading
+        delay(600)
+        _isLoggedIn.value = true
+        _currentUserPhone.value = "+91 98765 43210"
+        _authState.value = AuthState.Authenticated("+91 98765 43210", isDemoAccount = true)
+        return Result.success(Unit)
     }
 
     override suspend fun logout() {
