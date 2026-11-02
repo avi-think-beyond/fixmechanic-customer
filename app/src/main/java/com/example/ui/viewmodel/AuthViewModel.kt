@@ -20,8 +20,9 @@ data class AuthUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val demoNoticeMessage: String? = null,
+    val generatedOtp: String? = null,
     val isVerified: Boolean = false,
-    val isDemoMode: Boolean = true
+    val isDemoMode: Boolean = false
 )
 
 class AuthViewModel(
@@ -43,7 +44,7 @@ class AuthViewModel(
         _uiState.update { it.copy(otpCode = filtered, errorMessage = null) }
     }
 
-    fun sendOtp() {
+    fun sendOtp(context: android.content.Context? = null) {
         val phone = _uiState.value.phoneNumber
         if (phone.length != 10) {
             _uiState.update { it.copy(errorMessage = "Please enter a valid 10-digit Indian mobile number.") }
@@ -53,25 +54,47 @@ class AuthViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null, demoNoticeMessage = null) }
             val result = authRepository.requestOtp(phone)
-            result.onSuccess { message ->
+            result.onSuccess { generatedCode ->
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         isOtpSent = true,
-                        countdownSeconds = 30,
+                        countdownSeconds = 45,
                         errorMessage = null,
-                        demoNoticeMessage = if (authRepository.isDemoMode) message else null
+                        otpCode = "",
+                        generatedOtp = generatedCode,
+                        demoNoticeMessage = "Verification code generated! Tap 'Send via WhatsApp' to receive or dispatch your OTP freely."
                     )
                 }
                 startCountdown()
+
+                // If context provided, dispatch via WhatsApp intent freely
+                if (context != null) {
+                    dispatchViaWhatsApp(context, phone, generatedCode)
+                }
             }.onFailure { err ->
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        errorMessage = err.message ?: "Network error. Failed to dispatch OTP."
+                        errorMessage = err.message ?: "Failed to generate verification OTP."
                     )
                 }
             }
+        }
+    }
+
+    fun dispatchViaWhatsApp(context: android.content.Context, phone: String, code: String) {
+        try {
+            val fullPhone = if (phone.startsWith("91")) phone else "91$phone"
+            val messageText = "FixMechanic Live Verification Code: $code\n\nYour security OTP for 24/7 Roadside Assistance. Valid for 10 minutes."
+            val encodedMessage = java.net.URLEncoder.encode(messageText, "UTF-8")
+            val uri = android.net.Uri.parse("https://api.whatsapp.com/send?phone=$fullPhone&text=$encodedMessage")
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, uri).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("AuthViewModel", "WhatsApp dispatch error", e)
         }
     }
 
@@ -98,9 +121,9 @@ class AuthViewModel(
         }
     }
 
-    fun resendOtp() {
+    fun resendOtp(context: android.content.Context? = null) {
         if (_uiState.value.countdownSeconds <= 0) {
-            sendOtp()
+            sendOtp(context)
         }
     }
 

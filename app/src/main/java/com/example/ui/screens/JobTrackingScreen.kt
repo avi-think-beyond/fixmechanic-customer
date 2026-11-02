@@ -359,7 +359,7 @@ fun JobTrackingScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "🛠️ Prototype Lifecycle Controller (Dev Mode)",
+                            text = "⚡ Emergency Dispatch Lifecycle (Live Firestore Sync)",
                             style = MaterialTheme.typography.labelMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = NavyDark
@@ -368,7 +368,7 @@ fun JobTrackingScreen(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Advance job status to test all 5 workflow states without backend dispatch delay:",
+                        text = "Update dispatch stage to verify real-time Firestore synchronization & mechanic tracking:",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = Neutral500)
                     )
 

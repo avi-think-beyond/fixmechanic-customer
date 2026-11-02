@@ -201,7 +201,7 @@ fun HomeScreen(
 
         Column(modifier = Modifier.padding(20.dp)) {
 
-            // Prototype Notice
+            // Live Cloud Firestore Connection Status
             BackendNoticeBanner(onClickInspect = onOpenBackendStatus)
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -410,7 +410,7 @@ fun HomeScreen(
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = "Smart Problem Diagnoser",
+                                text = "24/7 AI Roadside Copilot",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = NavyDark
                             )
@@ -420,7 +420,7 @@ fun HomeScreen(
                                 color = Color(0xFFEEF2FF)
                             ) {
                                 Text(
-                                    text = "AI HELPER",
+                                    text = "FREE AI",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         fontSize = 9.sp,
                                         fontWeight = FontWeight.Bold,
@@ -432,7 +432,7 @@ fun HomeScreen(
                         }
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "Unsure what happened? Describe your noise or issue for instant service advice.",
+                            text = "Instant mechanical diagnosis, roadside safety steps & live Gemini AI breakdown advice.",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                             color = Neutral500
                         )

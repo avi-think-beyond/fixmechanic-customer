@@ -66,6 +66,6 @@ object ServiceLocator {
     }
 
     val aiDiagnosisRepository: AiDiagnosisRepository by lazy {
-        RuleBasedAiDiagnosisRepository()
+        com.example.data.repository.GeminiAiAssistantRepository(RuleBasedAiDiagnosisRepository())
     }
 }

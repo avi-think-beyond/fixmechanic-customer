@@ -373,6 +373,150 @@ fun AiDiagnoserScreen(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // 24/7 FIXMECHANIC LIVE AI ASSISTANT CHAT
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = PureWhite),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFC7D2FE)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF4F46E5)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = "AI Copilot",
+                                    tint = PureWhite,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "FixMechanic AI Roadside Copilot",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = NavyDark
+                                )
+                                Text(
+                                    text = "Free 24/7 AI Mechanical Advice • Gemini Live",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = SafetyGreen,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 10.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Chat messages list
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF8FAFC), RoundedCornerShape(12.dp))
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        aiState.chatMessages.forEach { msg ->
+                            val isAi = msg.sender == "ai"
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = if (isAi) Arrangement.Start else Arrangement.End
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(
+                                        topStart = 12.dp,
+                                        topEnd = 12.dp,
+                                        bottomStart = if (isAi) 2.dp else 12.dp,
+                                        bottomEnd = if (isAi) 12.dp else 2.dp
+                                    ),
+                                    color = if (isAi) PureWhite else Color(0xFF4F46E5),
+                                    border = if (isAi) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)) else null,
+                                    modifier = Modifier.fillMaxWidth(0.92f)
+                                ) {
+                                    Text(
+                                        text = msg.text,
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            fontSize = 12.sp,
+                                            lineHeight = 17.sp,
+                                            color = if (isAi) Neutral900 else PureWhite
+                                        ),
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        if (aiState.isAssistantThinking) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(6.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color(0xFF4F46E5)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "FixMechanic AI is analyzing your vehicle question...",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = Neutral500)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Input & Ask button
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = aiState.assistantQuestionInput,
+                            onValueChange = { aiViewModel.onAssistantQuestionChanged(it) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("ai_assistant_input"),
+                            placeholder = { Text("Ask anything (e.g. Can I drive with coolant leak?)", fontSize = 11.sp) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF4F46E5),
+                                unfocusedBorderColor = Neutral300
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { aiViewModel.askAssistant(selectedVehicleType) },
+                            enabled = !aiState.isAssistantThinking && aiState.assistantQuestionInput.isNotBlank(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4F46E5)),
+                            modifier = Modifier.testTag("ai_assistant_send_button")
+                        ) {
+                            Text("Ask", color = PureWhite, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
         }
     }
 }

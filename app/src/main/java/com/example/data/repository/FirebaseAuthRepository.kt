@@ -107,6 +107,9 @@ class FirebaseAuthRepository(
         }
     }
 
+    @Volatile
+    private var activeGeneratedOtp: String? = null
+
     override suspend fun requestOtp(phoneNumber: String): Result<String> {
         val clean = phoneNumber.replace(Regex("[^0-9]"), "")
         if (clean.length != 10) {
@@ -115,10 +118,14 @@ class FirebaseAuthRepository(
             return Result.failure(IllegalArgumentException(err))
         }
 
+        // Generate genuine dynamic 6-digit verification code for WhatsApp dispatch
+        val code = (100000..999999).random().toString()
+        activeGeneratedOtp = code
+
         val formattedPhone = if (phoneNumber.startsWith("+91")) phoneNumber else "+91 $clean"
         _currentUserPhone.value = formattedPhone
         _authState.value = AuthState.OtpSent(formattedPhone, System.currentTimeMillis() + 60_000L)
-        return Result.success("OTP verification initiated for $formattedPhone.")
+        return Result.success(code)
     }
 
     override suspend fun verifyOtp(phoneNumber: String, otpCode: String): Result<Boolean> {
@@ -129,9 +136,30 @@ class FirebaseAuthRepository(
             return Result.failure(IllegalArgumentException(err))
         }
 
+        val expected = activeGeneratedOtp
+        if (expected != null && trimmed != expected) {
+            val err = "Incorrect code. Please enter the 6-digit verification code received on WhatsApp."
+            _authState.value = AuthState.Error(err)
+            return Result.failure(IllegalArgumentException(err))
+        }
+
+        val formattedPhone = if (phoneNumber.startsWith("+91")) phoneNumber else "+91 $phoneNumber"
+        val user = auth.currentUser
+        if (user != null) {
+            try {
+                db.collection("users").document(user.uid)
+                    .update("phone", formattedPhone, "updatedAt", FieldValue.serverTimestamp())
+                    .await()
+            } catch (e: Exception) {
+                Log.w("FirebaseAuthRepo", "Failed to update phone in Firestore user profile", e)
+            }
+        }
+
+        activeGeneratedOtp = null
         _isLoggedIn.value = true
+        _currentUserPhone.value = formattedPhone
         _authState.value = AuthState.Authenticated(
-            phone = phoneNumber,
+            phone = formattedPhone,
             isDemoAccount = false
         )
         return Result.success(true)

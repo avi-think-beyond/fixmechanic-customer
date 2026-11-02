@@ -8,7 +8,9 @@ data class AiDiagnosisResult(
     val suggestedService: ServiceItem,
     val confidenceScore: Float,
     val explanation: String,
-    val alternativeServices: List<ServiceItem>
+    val alternativeServices: List<ServiceItem>,
+    val safetyAction: String = "",
+    val severityLevel: String = "Moderate"
 )
 
 interface AiDiagnosisRepository {
@@ -16,6 +18,11 @@ interface AiDiagnosisRepository {
         description: String,
         vehicleType: VehicleType
     ): Result<AiDiagnosisResult>
+
+    suspend fun askAssistant(
+        question: String,
+        vehicleType: VehicleType
+    ): Result<String>
 }
 
 /**
@@ -24,6 +31,26 @@ interface AiDiagnosisRepository {
  * Strictly suggests service categories; never dispatches or overrides user selection.
  */
 class RuleBasedAiDiagnosisRepository : AiDiagnosisRepository {
+
+    override suspend fun askAssistant(
+        question: String,
+        vehicleType: VehicleType
+    ): Result<String> {
+        val lower = question.lowercase()
+        val answer = when {
+            lower.contains("puncture") || lower.contains("flat") ->
+                "If driving on a flat tyre, pull over immediately to the left highway shoulder. Driving further will damage the wheel rim and sidewall. Turn on hazard blinkers and request tyre service."
+            lower.contains("battery") || lower.contains("jump") ->
+                "If jump-starting, connect Red (+ve) clamp first, then Black (-ve) to an unpainted chassis ground. Let donor vehicle run for 3 minutes before starting."
+            lower.contains("overheat") || lower.contains("steam") ->
+                "Do NOT open the radiator cap while the engine is hot—scalding coolant can erupt under pressure. Wait at least 20 minutes for the engine to cool down."
+            lower.contains("clutch") || lower.contains("brake") ->
+                "If brakes or clutch feel soft or unresponsive, avoid driving. Shift to lower gear gradually and coast safely to the shoulder."
+            else ->
+                "Safety first: Keep hazard lights flashing, position the vehicle on the roadside shoulder away from oncoming traffic, and request roadside dispatch."
+        }
+        return Result.success(answer)
+    }
 
     override suspend fun diagnoseIssue(
         description: String,

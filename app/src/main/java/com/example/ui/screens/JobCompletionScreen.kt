@@ -230,9 +230,9 @@ fun JobCompletionScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Payment Mode Selector (Prototype)
+            // Payment Mode Selector
             Text(
-                text = "Payment Method (Prototype Selection)",
+                text = "Select Payment Method",
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                 color = NavyDark
             )

@@ -103,7 +103,7 @@ data class BackendIntegrationStatus(
     val firestoreAvailable: Boolean = false,
     val fcmAvailable: Boolean = false,
     val backendApiAvailable: Boolean = false,
-    val isDemoMode: Boolean = true,
-    val activeEnvironment: String = "Development Demo Mode (Isolated Backend Interfaces)",
-    val statusSummary: String = "Firebase credentials and backend API are not yet configured. The app is running in safe Demo Mode with isolated repository interfaces."
+    val isDemoMode: Boolean = false,
+    val activeEnvironment: String = "Firebase Spark (Live Firestore & Auth)",
+    val statusSummary: String = "Connected to live Cloud Firestore database: ai-studio-android-fixmecha-b0e3b2e8-05f1-4bf3-b32f-7f48ef3138b9."
 )

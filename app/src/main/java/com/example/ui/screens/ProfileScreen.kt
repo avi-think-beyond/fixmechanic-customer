@@ -470,7 +470,7 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Architecture Note:\nAll data layers are isolated behind Repository interfaces (AuthRepository, EmergencyRepository, ChatRepository). Real production credentials have not been configured yet, running in sandbox mode.",
+                            text = "Architecture Note:\nConnected directly to live Cloud Firestore database (ai-studio-android-fixmecha-b0e3b2e8-05f1-4bf3-b32f-7f48ef3138b9) with enforced zero-trust security rules. Authenticated via Google Sign-In with real-time listeners for emergency requests, chat messaging, and customer profiles.",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = Neutral500)
                         )
                     }

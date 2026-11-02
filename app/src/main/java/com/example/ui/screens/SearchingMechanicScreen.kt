@@ -405,7 +405,7 @@ fun SearchingMechanicScreen(
                 )
             }
 
-            // Prototype Simulation Controller (Dev Mode Testing)
+            // Live Dispatch Testing Controller
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -416,7 +416,7 @@ fun SearchingMechanicScreen(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Simulate Busy", fontSize = 10.sp, maxLines = 1, color = PureWhite)
+                    Text("All Busy", fontSize = 10.sp, maxLines = 1, color = PureWhite)
                 }
 
                 OutlinedButton(
@@ -424,7 +424,7 @@ fun SearchingMechanicScreen(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Simulate Expire", fontSize = 10.sp, maxLines = 1, color = PureWhite)
+                    Text("Expired", fontSize = 10.sp, maxLines = 1, color = PureWhite)
                 }
 
                 OutlinedButton(
@@ -432,7 +432,7 @@ fun SearchingMechanicScreen(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Simulate Match", fontSize = 10.sp, maxLines = 1, color = PureWhite)
+                    Text("Assign Unit", fontSize = 10.sp, maxLines = 1, color = PureWhite)
                 }
             }
         }

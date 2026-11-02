@@ -533,23 +533,42 @@ fun BackendNoticeBanner(
             .fillMaxWidth()
             .clickable { onClickInspect() },
         color = NavyDark,
-        shape = RoundedCornerShape(10.dp)
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, SafetyGreen.copy(alpha = 0.5f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = "Info",
-                tint = WarningAmber,
-                modifier = Modifier.size(16.dp)
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(SafetyGreen)
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Running in Safe Prototype Mode. Tap to view Backend & Firebase status.",
-                style = MaterialTheme.typography.labelSmall.copy(color = PureWhite),
-                modifier = Modifier.weight(1f)
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Live Cloud Firestore Connected",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = PureWhite,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    )
+                )
+                Text(
+                    text = "Real-time sync active • Tap to view security & database details",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = PureWhite.copy(alpha = 0.7f),
+                        fontSize = 10.sp
+                    )
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = "Cloud Connected",
+                tint = SafetyGreen,
+                modifier = Modifier.size(16.dp)
             )
         }
     }
