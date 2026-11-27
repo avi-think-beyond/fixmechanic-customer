@@ -2,28 +2,37 @@ package com.example.data.repository
 
 import android.content.Context
 import android.util.Log
-import com.example.R
+import com.example.data.FirestoreProvider
+import com.example.data.FirestoreProvider.awaitResult
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
-import com.google.firebase.firestore.FieldValue
+import com.google.firebase.auth.UserProfileChangeRequest
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 class FirebaseAuthRepository(
     private val db: FirebaseFirestore,
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : AuthRepository {
 
+    companion object {
+        private fun createFirestore(context: Context): FirebaseFirestore =
+            FirestoreProvider.createFirestore(context.applicationContext)
+
+        private fun createAuth(): FirebaseAuth = FirebaseAuth.getInstance()
+    }
+
     constructor(context: Context) : this(
-        FirebaseFirestore.getInstance(context.applicationContext.getString(R.string.firestore_database_id)),
-        FirebaseAuth.getInstance()
+        db = createFirestore(context),
+        auth = createAuth()
     )
 
     override val isDemoMode: Boolean = false
@@ -34,7 +43,9 @@ class FirebaseAuthRepository(
     private val _isLoggedIn = MutableStateFlow(auth.currentUser != null)
     override val isLoggedInFlow: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
-    private val _currentUserPhone = MutableStateFlow<String?>(auth.currentUser?.phoneNumber ?: auth.currentUser?.email)
+    private val _currentUserPhone = MutableStateFlow<String?>(
+        auth.currentUser?.phoneNumber ?: auth.currentUser?.email
+    )
     override val currentUserPhone: StateFlow<String?> = _currentUserPhone.asStateFlow()
 
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -56,23 +67,57 @@ class FirebaseAuthRepository(
         }
     }
 
-    private suspend fun syncUserProfile(user: FirebaseUser) {
+    private suspend fun syncUserProfile(user: FirebaseUser, explicitName: String? = null) {
+        val now = System.currentTimeMillis()
         try {
             val userDoc = db.collection("users").document(user.uid)
-            val snapshot = userDoc.get().await()
+            val snapshot = userDoc.get().awaitResult()
+            val resolvedName = explicitName?.takeIf { it.isNotBlank() }
+                ?: user.displayName?.takeIf { it.isNotBlank() }
+                ?: user.email?.substringBefore("@")
+                ?: "FixMechanic Customer"
+
             if (!snapshot.exists()) {
                 val profile = hashMapOf(
                     "uid" to user.uid,
-                    "customerId" to "FM-CUST-${user.uid.take(6).uppercase()}",
-                    "displayName" to (user.displayName ?: "FixMechanic Customer"),
+                    "role" to "CUSTOMER",
+                    "displayName" to resolvedName,
                     "email" to (user.email ?: ""),
                     "phone" to (user.phoneNumber ?: ""),
-                    "role" to "customer",
-                    "createdAt" to FieldValue.serverTimestamp(),
-                    "updatedAt" to FieldValue.serverTimestamp()
+                    "disabled" to false,
+                    "createdAt" to now,
+                    "updatedAt" to now
                 )
-                userDoc.set(profile).await()
+                userDoc.set(profile).awaitResult()
+            } else {
+                // Never write role/disabled on update so zero-trust rules succeed
+                userDoc.set(
+                    mapOf(
+                        "email" to (user.email ?: snapshot.getString("email") ?: ""),
+                        "displayName" to (snapshot.getString("displayName") ?: resolvedName),
+                        "updatedAt" to now
+                    ),
+                    SetOptions.merge()
+                ).awaitResult()
             }
+
+            // Best-effort FCM token registration for Spark push alerts
+            runCatching {
+                val token = FirebaseMessaging.getInstance().token.awaitResult()
+                if (token.isNotBlank()) {
+                    db.collection("deviceTokens").document("${user.uid}_android").set(
+                        mapOf(
+                            "userId" to user.uid,
+                            "role" to "CUSTOMER",
+                            "platform" to "android",
+                            "token" to token,
+                            "updatedAt" to now
+                        ),
+                        SetOptions.merge()
+                    ).awaitResult()
+                }
+            }
+
             _authState.value = AuthState.Authenticated(
                 phone = user.phoneNumber ?: user.email ?: user.uid,
                 isDemoAccount = false
@@ -90,7 +135,7 @@ class FirebaseAuthRepository(
         _authState.value = AuthState.Loading
         return try {
             val credential = GoogleAuthProvider.getCredential(idToken, null)
-            val authResult = auth.signInWithCredential(credential).await()
+            val authResult = auth.signInWithCredential(credential).awaitResult()
             val user = authResult.user
             if (user != null) {
                 syncUserProfile(user)
@@ -107,62 +152,60 @@ class FirebaseAuthRepository(
         }
     }
 
-    @Volatile
-    private var activeGeneratedOtp: String? = null
-
-    override suspend fun requestOtp(phoneNumber: String): Result<String> {
-        val clean = phoneNumber.replace(Regex("[^0-9]"), "")
-        if (clean.length != 10) {
-            val err = "Please enter a valid 10-digit Indian mobile number."
+    override suspend fun signInWithEmail(email: String, password: String): Result<Unit> {
+        val cleanEmail = email.trim()
+        if (cleanEmail.isBlank() || password.length < 6) {
+            val err = "Please enter a valid email and password (minimum 6 characters)."
             _authState.value = AuthState.Error(err)
             return Result.failure(IllegalArgumentException(err))
         }
+        _authState.value = AuthState.Loading
+        return try {
+            val authResult = auth.signInWithEmailAndPassword(cleanEmail, password).awaitResult()
+            val user = authResult.user ?: error("Sign-in succeeded but user is null.")
+            syncUserProfile(user)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            _authState.value = AuthState.Error(e.localizedMessage ?: "Email sign-in failed")
+            Result.failure(e)
+        }
+    }
 
-        // Generate genuine dynamic 6-digit verification code for WhatsApp dispatch
-        val code = (100000..999999).random().toString()
-        activeGeneratedOtp = code
+    override suspend fun registerWithEmail(name: String, email: String, password: String): Result<Unit> {
+        val cleanEmail = email.trim()
+        val cleanName = name.trim()
+        if (cleanName.isBlank() || cleanEmail.isBlank() || password.length < 6) {
+            val err = "Full name, valid email, and password (6+ chars) are required."
+            _authState.value = AuthState.Error(err)
+            return Result.failure(IllegalArgumentException(err))
+        }
+        _authState.value = AuthState.Loading
+        return try {
+            val authResult = auth.createUserWithEmailAndPassword(cleanEmail, password).awaitResult()
+            val user = authResult.user ?: error("Registration succeeded but user is null.")
+            runCatching {
+                user.updateProfile(
+                    UserProfileChangeRequest.Builder().setDisplayName(cleanName).build()
+                ).awaitResult()
+            }
+            syncUserProfile(user, explicitName = cleanName)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            _authState.value = AuthState.Error(e.localizedMessage ?: "Registration failed")
+            Result.failure(e)
+        }
+    }
 
-        val formattedPhone = if (phoneNumber.startsWith("+91")) phoneNumber else "+91 $clean"
-        _currentUserPhone.value = formattedPhone
-        _authState.value = AuthState.OtpSent(formattedPhone, System.currentTimeMillis() + 60_000L)
-        return Result.success(code)
+    override suspend fun requestOtp(phoneNumber: String): Result<String> {
+        val err = "Firebase Phone SMS OTP requires the Blaze pay-as-you-go plan. On Spark, please sign in using Email/Password or Google Sign-In."
+        _authState.value = AuthState.Error(err)
+        return Result.failure(UnsupportedOperationException(err))
     }
 
     override suspend fun verifyOtp(phoneNumber: String, otpCode: String): Result<Boolean> {
-        val trimmed = otpCode.trim()
-        if (trimmed.length != 6 || !trimmed.all { it.isDigit() }) {
-            val err = "Invalid OTP code. Must be 6 digits."
-            _authState.value = AuthState.Error(err)
-            return Result.failure(IllegalArgumentException(err))
-        }
-
-        val expected = activeGeneratedOtp
-        if (expected != null && trimmed != expected) {
-            val err = "Incorrect code. Please enter the 6-digit verification code received on WhatsApp."
-            _authState.value = AuthState.Error(err)
-            return Result.failure(IllegalArgumentException(err))
-        }
-
-        val formattedPhone = if (phoneNumber.startsWith("+91")) phoneNumber else "+91 $phoneNumber"
-        val user = auth.currentUser
-        if (user != null) {
-            try {
-                db.collection("users").document(user.uid)
-                    .update("phone", formattedPhone, "updatedAt", FieldValue.serverTimestamp())
-                    .await()
-            } catch (e: Exception) {
-                Log.w("FirebaseAuthRepo", "Failed to update phone in Firestore user profile", e)
-            }
-        }
-
-        activeGeneratedOtp = null
-        _isLoggedIn.value = true
-        _currentUserPhone.value = formattedPhone
-        _authState.value = AuthState.Authenticated(
-            phone = formattedPhone,
-            isDemoAccount = false
-        )
-        return Result.success(true)
+        val err = "Firebase Phone SMS OTP requires the Blaze pay-as-you-go plan."
+        _authState.value = AuthState.Error(err)
+        return Result.failure(UnsupportedOperationException(err))
     }
 
     override suspend fun logout() {

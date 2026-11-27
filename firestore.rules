@@ -6,109 +6,191 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function hasRoleInUsersDoc(roleName) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == roleName;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'ADMIN' ||
+        request.auth.token.admin == true ||
+        hasRoleInUsersDoc('ADMIN')
+      );
+    }
+
+    function isMechanic() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'MECHANIC' ||
+        hasRoleInUsersDoc('MECHANIC')
+      );
+    }
+
+    function isCustomer() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'CUSTOMER' ||
+        hasRoleInUsersDoc('CUSTOMER')
+      );
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isValidTimestamp(val) {
-      return val is timestamp && val <= request.time;
+    // Default: Strictly deny everything
+    match /{document=**} {
+      allow read, write: if false;
     }
 
-    // --- Users Collection ---
+    // 1. users
+    // Authenticated users can read their own user profile; admins can read all
+    // Clients can NEVER escalate to ADMIN or alter disabled flag directly
     match /users/{userId} {
-      allow read: if isAuthenticated() && (
-        request.auth.uid == userId ||
-        resource.data.role == 'mechanic'
-      );
-
-      // Customers can create their profile on registration with role 'customer'
+      allow read: if isOwner(userId) || isAdmin();
       allow create: if isOwner(userId) &&
-        request.resource.data.uid == userId &&
-        request.resource.data.role == 'customer';
-
-      // Updates cannot alter user ID or elevate role
-      allow update: if isOwner(userId) &&
-        request.resource.data.uid == userId &&
-        request.resource.data.role == resource.data.role;
-
-      allow delete: if false;
+        (request.resource.data.role == 'CUSTOMER' || request.resource.data.role == 'MECHANIC');
+      allow update: if (isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'disabled'])) ||
+        isAdmin();
+      allow delete: if isAdmin();
     }
 
-    // --- Service Requests Collection ---
+    // 2. customerProfiles
+    match /customerProfiles/{customerId} {
+      allow read: if isOwner(customerId) || isAdmin();
+      allow create, update: if isOwner(customerId);
+      allow delete: if isAdmin();
+    }
+
+    // 3. mechanicProfiles
+    // Create: initial registration strictly in PENDING status and offline
+    // Update: mechanic can only update non-privileged fields and can only go online when APPROVED
+    match /mechanicProfiles/{mechanicId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(mechanicId) &&
+        request.resource.data.approvalStatus == 'PENDING' &&
+        (!('isOnline' in request.resource.data) || request.resource.data.isOnline == false) &&
+        (!('isBusy' in request.resource.data) || request.resource.data.isBusy == false);
+      allow update: if (isOwner(mechanicId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'approvalStatus',
+          'rejectionReason',
+          'statusReason',
+          'verifiedAt',
+          'verifiedBy',
+          'ratingAverage',
+          'ratingCount',
+          'isBusy',
+          'activeJobId',
+          'totalCompletedJobs',
+          'todayEarningsInr'
+        ]) &&
+        (!('isOnline' in request.resource.data) ||
+          request.resource.data.isOnline == false ||
+          resource.data.approvalStatus == 'APPROVED')) ||
+        isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 4. mechanicServiceAreas & serviceCategories
+    match /mechanicServiceAreas/{areaId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /serviceCategories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // 5. serviceRequests
+    // Privileged mutations (creation, dispatch, assignment, status transitions) MUST go through Backend API
     match /serviceRequests/{requestId} {
-      // Customer can read their own request; assigned mechanic can read; open requests can be scanned for dispatch
       allow read: if isAuthenticated() && (
         resource.data.customerId == request.auth.uid ||
         resource.data.assignedMechanicId == request.auth.uid ||
-        resource.data.status in ['open', 'REQUESTED', 'SEARCHING']
+        isAdmin()
       );
+      allow write: if isAdmin();
+    }
 
-      // Customer can create service requests for themselves
-      allow create: if isAuthenticated() &&
-        request.resource.data.customerId == request.auth.uid &&
-        request.resource.data.status in ['open', 'REQUESTED', 'SEARCHING'];
-
-      // Owner customer can cancel or update notes/rating; assigned mechanic can update status
-      allow update: if isAuthenticated() && (
-        // Customer updates (e.g., cancel request, rating, or updating details)
-        (
-          resource.data.customerId == request.auth.uid &&
-          request.resource.data.customerId == request.auth.uid
-        ) ||
-        // Assigned mechanic updating progress
-        (
-          resource.data.assignedMechanicId == request.auth.uid &&
-          request.resource.data.customerId == resource.data.customerId
-        ) ||
-        // Mechanic self-assigning if previously unassigned
-        (
-          (resource.data.assignedMechanicId == null || resource.data.assignedMechanicId == '') &&
-          request.resource.data.assignedMechanicId == request.auth.uid &&
-          request.resource.data.customerId == resource.data.customerId
-        )
+    // 6. jobOffers
+    // Mechanics can ONLY read offers targeted specifically to their mechanicId
+    match /jobOffers/{offerId} {
+      allow read: if isAuthenticated() && (
+        resource.data.mechanicId == request.auth.uid ||
+        isAdmin()
       );
+      allow write: if isAdmin();
+    }
 
-      allow delete: if false;
+    // 7. jobAssignments
+    match /jobAssignments/{requestId} {
+      allow read: if isAuthenticated() && (
+        resource.data.customerId == request.auth.uid ||
+        resource.data.mechanicId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAdmin();
+    }
 
-      match /messages/{messageId} {
-        allow read, create: if isAuthenticated();
-        allow update, delete: if false;
+    // 8. jobStatusEvents
+    match /jobStatusEvents/{eventId} {
+      allow read: if isAuthenticated() && (
+        resource.data.actorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAdmin();
+    }
+
+    // 9. jobChats and jobMessages
+    match /jobChats/{requestId} {
+      allow read: if isAuthenticated() && (
+        resource.data.customerId == request.auth.uid ||
+        resource.data.mechanicId == request.auth.uid ||
+        isAdmin()
+      );
+      allow write: if isAdmin();
+
+      match /jobMessages/{messageId} {
+        allow read: if isAuthenticated() && (
+          get(/databases/$(database)/documents/jobChats/$(requestId)).data.customerId == request.auth.uid ||
+          get(/databases/$(database)/documents/jobChats/$(requestId)).data.mechanicId == request.auth.uid ||
+          isAdmin()
+        );
+        allow create: if isAuthenticated() &&
+          get(/databases/$(database)/documents/jobChats/$(requestId)).data.status == 'OPEN' &&
+          (get(/databases/$(database)/documents/jobChats/$(requestId)).data.customerId == request.auth.uid ||
+           get(/databases/$(database)/documents/jobChats/$(requestId)).data.mechanicId == request.auth.uid) &&
+          request.resource.data.senderId == request.auth.uid;
+        allow update, delete: if isAdmin();
       }
     }
 
-    // --- Request Responses Collection ---
-    match /requestResponses/{responseId} {
+    // 10. ratings
+    match /ratings/{ratingId} {
       allow read: if isAuthenticated();
-
-      allow create: if isAuthenticated() &&
-        request.resource.data.mechanicId == request.auth.uid;
-
-      allow update: if isAuthenticated() &&
-        (resource.data.mechanicId == request.auth.uid || request.auth.uid != null);
-
-      allow delete: if false;
+      allow create: if isCustomer() && request.resource.data.customerId == request.auth.uid;
+      allow update, delete: if isAdmin();
     }
 
-    // --- Request Events (Audit log) ---
-    match /requestEvents/{eventId} {
-      allow read: if isAuthenticated();
-
-      // Append-only audit logs
-      allow create: if isAuthenticated();
-      allow update, delete: if false;
+    // 11. deviceTokens
+    match /deviceTokens/{tokenId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isOwner(resource.data.userId) || isAdmin();
     }
 
-    // --- Reviews Collection ---
-    match /reviews/{reviewId} {
+    // 12. adminAuditLogs
+    match /adminAuditLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 13. applicationConfig
+    match /applicationConfig/{configId} {
       allow read: if isAuthenticated();
-
-      // Only the customer who received service can author a review
-      allow create: if isAuthenticated() &&
-        request.resource.data.customerId == request.auth.uid &&
-        request.resource.data.rating >= 1 &&
-        request.resource.data.rating <= 5;
-
-      allow update, delete: if false;
+      allow write: if isAdmin();
     }
   }
 }

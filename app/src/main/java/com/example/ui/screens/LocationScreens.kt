@@ -367,7 +367,7 @@ fun LocationScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Button(
-                            onClick = { emergencyViewModel.saveManualLocation() },
+                            onClick = { emergencyViewModel.saveManualLocation(context) },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(48.dp)

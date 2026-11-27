@@ -40,6 +40,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -81,6 +82,12 @@ fun JobTrackingScreen(
     val activeRequest by emergencyViewModel.activeRequest.collectAsState()
     val request = activeRequest
     val mechanic = request?.assignedMechanic
+
+    LaunchedEffect(request?.status) {
+        if (request?.status == JobStatus.COMPLETED) {
+            onJobCompleted()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -345,7 +352,6 @@ fun JobTrackingScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // DEV MODE STATE CONTROLLER
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(14.dp),
@@ -353,86 +359,18 @@ fun JobTrackingScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1))
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "⚡ Emergency Dispatch Lifecycle (Live Firestore Sync)",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = NavyDark
-                            )
+                    Text(
+                        text = "Live Dispatch Sync Active",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = NavyDark
                         )
-                    }
+                    )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Update dispatch stage to verify real-time Firestore synchronization & mechanic tracking:",
+                        text = "Stage updates automatically as your assigned mechanic progresses from En Route to Completed.",
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = Neutral500)
                     )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { emergencyViewModel.devAdvanceStatus(JobStatus.ACCEPTED) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Accept", fontSize = 10.sp, maxLines = 1)
-                        }
-
-                        OutlinedButton(
-                            onClick = { emergencyViewModel.devAdvanceStatus(JobStatus.EN_ROUTE) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("En Route", fontSize = 10.sp, maxLines = 1)
-                        }
-
-                        OutlinedButton(
-                            onClick = { emergencyViewModel.devAdvanceStatus(JobStatus.ARRIVED) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Arrived", fontSize = 10.sp, maxLines = 1)
-                        }
-
-                        OutlinedButton(
-                            onClick = { emergencyViewModel.devAdvanceStatus(JobStatus.IN_PROGRESS) },
-                            modifier = Modifier.weight(1f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text("Repairing", fontSize = 10.sp, maxLines = 1)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Button(
-                        onClick = {
-                            emergencyViewModel.devAdvanceStatus(JobStatus.COMPLETED)
-                            onJobCompleted()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("simulate_complete_button"),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = SafetyGreen)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = PureWhite,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Simulate Job Completion & Open Rating Screen", fontWeight = FontWeight.Bold, color = PureWhite, fontSize = 12.sp)
-                    }
                 }
             }
         }

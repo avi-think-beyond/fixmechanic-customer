@@ -15,7 +15,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class ExampleRobolectricTest {
 
     @Test
@@ -26,15 +26,19 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify bike services count`() {
+    fun `verify bike services count and backend mapping`() {
         val bikeServices = ServiceCatalog.getServices(VehicleType.BIKE)
         assertEquals(10, bikeServices.size)
+        assertEquals("TWO_WHEELER", VehicleType.BIKE.toBackendVehicleType())
+        assertEquals("FLAT_TYRE", bikeServices.first { it.id == "bike_puncture" }.toBackendServiceCategory())
     }
 
     @Test
-    fun `verify car services count`() {
+    fun `verify car services count and backend mapping`() {
         val carServices = ServiceCatalog.getServices(VehicleType.CAR)
         assertEquals(10, carServices.size)
+        assertEquals("FOUR_WHEELER_CAR", VehicleType.CAR.toBackendVehicleType())
+        assertEquals("BATTERY_JUMPSTART", carServices.first { it.id == "car_battery" }.toBackendServiceCategory())
     }
 
     @Test
