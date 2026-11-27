@@ -241,8 +241,15 @@ fun AiDiagnoserScreen(
                 },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = NavyDark,
+                    unfocusedTextColor = NavyDark,
+                    focusedContainerColor = PureWhite,
+                    unfocusedContainerColor = PureWhite,
                     focusedBorderColor = Color(0xFF4F46E5),
-                    unfocusedBorderColor = Neutral300
+                    unfocusedBorderColor = Neutral300,
+                    focusedPlaceholderColor = Neutral500,
+                    unfocusedPlaceholderColor = Neutral500,
+                    cursorColor = Color(0xFF4F46E5)
                 ),
                 maxLines = 4
             )
@@ -352,7 +359,7 @@ fun AiDiagnoserScreen(
 
                             Button(
                                 onClick = {
-                                    emergencyViewModel.selectVehicleType(selectedVehicleType)
+                                    emergencyViewModel.startNewEmergencyFlow(selectedVehicleType)
                                     emergencyViewModel.selectService(diag.suggestedService)
                                     onServiceSelected()
                                 },
@@ -500,8 +507,15 @@ fun AiDiagnoserScreen(
                             singleLine = true,
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = NavyDark,
+                                unfocusedTextColor = NavyDark,
+                                focusedContainerColor = PureWhite,
+                                unfocusedContainerColor = PureWhite,
+                                focusedPlaceholderColor = Neutral500,
+                                unfocusedPlaceholderColor = Neutral500,
                                 focusedBorderColor = Color(0xFF4F46E5),
-                                unfocusedBorderColor = Neutral300
+                                unfocusedBorderColor = Neutral300,
+                                cursorColor = Color(0xFF4F46E5)
                             )
                         )
                         Spacer(modifier = Modifier.width(8.dp))

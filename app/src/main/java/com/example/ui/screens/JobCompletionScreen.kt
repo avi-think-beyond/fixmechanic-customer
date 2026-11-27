@@ -28,7 +28,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.LaunchedEffect
+import com.example.data.model.JobStatus
+import com.example.ui.theme.EmergencyRed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -46,11 +51,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
 import com.example.ui.components.FixMechanicTopBar
 import com.example.ui.theme.EmergencyOrange
@@ -63,19 +70,41 @@ import com.example.ui.theme.Neutral900
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.SafetyGreen
 import com.example.ui.theme.WarningAmber
+import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.viewmodel.EmergencyViewModel
 
 @Composable
 fun JobCompletionScreen(
     emergencyViewModel: EmergencyViewModel,
+    authViewModel: AuthViewModel = viewModel(),
     onFinished: () -> Unit
 ) {
+    val context = LocalContext.current
+    val uiState by emergencyViewModel.uiState.collectAsState()
+    val authState by authViewModel.uiState.collectAsState()
     val activeRequest by emergencyViewModel.activeRequest.collectAsState()
+    val pendingReviewRequest by emergencyViewModel.pendingReviewRequest.collectAsState()
+    val requestHistory by emergencyViewModel.requestHistory.collectAsState()
+    val targetRequest = activeRequest
+        ?: pendingReviewRequest
+        ?: requestHistory.firstOrNull { it.status == JobStatus.COMPLETED && it.ratingGiven == null }
+        ?: requestHistory.firstOrNull()
+
     var selectedRating by remember { mutableFloatStateOf(5.0f) }
     var selectedPaymentMethod by remember { mutableStateOf("UPI") }
     var feedbackComments by remember { mutableStateOf("") }
     val feedbackTags = listOf("Very Punctual", "Transparent Pricing", "Expert Work", "Polite Behavior", "Clean Tools")
     var selectedTags by remember { mutableStateOf(setOf("Very Punctual", "Transparent Pricing")) }
+
+    LaunchedEffect(Unit) {
+        emergencyViewModel.clearError()
+    }
+
+    LaunchedEffect(authState.authRefreshCount) {
+        if (authState.authRefreshCount > 0) {
+            emergencyViewModel.refreshSession()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -158,12 +187,12 @@ fun JobCompletionScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = activeRequest?.serviceItem?.title ?: "Standard Inspection",
+                            text = targetRequest?.serviceItem?.title ?: "Standard Inspection",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Neutral800
                         )
                         Text(
-                            text = "₹${activeRequest?.baseInspectionFee ?: 249}",
+                            text = "₹${targetRequest?.baseInspectionFee ?: 249}",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                             color = NavyDark
                         )
@@ -218,7 +247,7 @@ fun JobCompletionScreen(
                             color = NavyDark
                         )
                         Text(
-                            text = "₹${activeRequest?.baseInspectionFee ?: 249}",
+                            text = "₹${targetRequest?.baseInspectionFee ?: 249}",
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.ExtraBold,
                                 color = EmergencyOrange
@@ -282,7 +311,7 @@ fun JobCompletionScreen(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "How was your experience with ${activeRequest?.assignedMechanic?.name ?: "the mechanic"}?",
+                        text = "How was your experience with ${targetRequest?.assignedMechanic?.name ?: "the mechanic"}?",
                         style = MaterialTheme.typography.bodySmall.copy(color = Neutral500)
                     )
 
@@ -382,14 +411,88 @@ fun JobCompletionScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("feedback_comments_input"),
-                        placeholder = { Text("Write additional feedback (optional)...", fontSize = 12.sp) },
+                        placeholder = { Text("Write additional feedback (optional)...", color = Neutral500, fontSize = 12.sp) },
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = NavyDark,
+                            unfocusedTextColor = NavyDark,
+                            focusedContainerColor = PureWhite,
+                            unfocusedContainerColor = PureWhite,
                             focusedBorderColor = NavyDark,
-                            unfocusedBorderColor = Neutral300
+                            unfocusedBorderColor = Neutral300,
+                            focusedPlaceholderColor = Neutral500,
+                            unfocusedPlaceholderColor = Neutral500,
+                            cursorColor = EmergencyOrange
                         ),
                         maxLines = 3
                     )
+                }
+            }
+
+            if (uiState.errorMessage != null) {
+                val errText = uiState.errorMessage ?: ""
+                val isAuthOrPermIssue = errText.contains("denied", ignoreCase = true) ||
+                    errText.contains("permission", ignoreCase = true) ||
+                    errText.contains("Google", ignoreCase = true) ||
+                    errText.contains("session", ignoreCase = true) ||
+                    errText.contains("token", ignoreCase = true)
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("completion_error_card"),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = errText,
+                            style = MaterialTheme.typography.bodySmall.copy(color = EmergencyRed)
+                        )
+                        if (authState.errorMessage != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = authState.errorMessage ?: "",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = EmergencyRed,
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
+                        if (isAuthOrPermIssue) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    emergencyViewModel.clearError()
+                                    authViewModel.signInWithGoogle(context)
+                                },
+                                enabled = !authState.isLoading,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
+                                    .testTag("completion_reverify_google_button"),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = NavyDark)
+                            ) {
+                                if (authState.isLoading) {
+                                    CircularProgressIndicator(
+                                        color = PureWhite,
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Re-verify Google Sign-In",
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = PureWhite
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -399,11 +502,13 @@ fun JobCompletionScreen(
                 onClick = {
                     emergencyViewModel.submitRating(
                         rating = selectedRating,
-                        comment = feedbackComments.ifBlank { selectedTags.joinToString(", ") }
+                        comment = feedbackComments.ifBlank { selectedTags.joinToString(", ") },
+                        paymentMethod = selectedPaymentMethod
                     ) {
                         onFinished()
                     }
                 },
+                enabled = !uiState.isSubmitting,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp)
@@ -411,11 +516,39 @@ fun JobCompletionScreen(
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = NavyDark)
             ) {
+                if (uiState.isSubmitting) {
+                    CircularProgressIndicator(
+                        color = PureWhite,
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.5.dp
+                    )
+                } else {
+                    Text(
+                        text = stringResource(id = R.string.btn_submit_feedback),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = PureWhite
+                        )
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedButton(
+                onClick = onFinished,
+                enabled = !uiState.isSubmitting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("back_home_from_completion_button"),
+                shape = RoundedCornerShape(14.dp)
+            ) {
                 Text(
-                    text = stringResource(id = R.string.btn_submit_feedback),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = PureWhite
+                    text = "Back to Home",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = NavyDark
                     )
                 )
             }

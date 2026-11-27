@@ -7,6 +7,7 @@ import com.example.data.model.JobStatus
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.EmergencyRepository
 import com.example.di.ServiceLocator
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +38,7 @@ class ChatViewModel(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private var currentJobId: String = "active_job"
+    private var chatMessagesJob: Job? = null
 
     init {
         // Observe active request to track if job status becomes terminal
@@ -52,13 +54,22 @@ class ChatViewModel(
     fun loadChat(jobId: String, jobStatus: JobStatus? = null) {
         currentJobId = jobId
         val isClosed = jobStatus?.isTerminal ?: false
-        _uiState.update { it.copy(isSessionClosed = isClosed) }
+        _uiState.update { it.copy(isSessionClosed = isClosed, messages = emptyList(), errorMessage = null) }
 
-        viewModelScope.launch {
+        chatMessagesJob?.cancel()
+        chatMessagesJob = viewModelScope.launch {
             chatRepository.observeMessages(jobId).collect { msgList ->
                 _uiState.update { it.copy(messages = msgList) }
             }
         }
+    }
+
+    fun resetForLogout() {
+        chatMessagesJob?.cancel()
+        chatMessagesJob = null
+        currentJobId = "active_job"
+        chatRepository.clearSession()
+        _uiState.value = ChatUiState()
     }
 
     fun onInputChanged(text: String) {

@@ -5,12 +5,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class UserProfileData(
-    val fullName: String = "Aditya Sharma",
-    val phoneNumber: String = "+91 98765 43210",
-    val email: String = "asharma05246@gmail.com",
-    val emergencyContactName: String = "Pooja Sharma (Family)",
-    val emergencyContactPhone: String = "+91 98111 22334",
-    val primaryVehicle: String = "Honda City ZX & RE Classic 350",
+    val fullName: String = "Customer",
+    val phoneNumber: String = "",
+    val email: String = "",
+    val emergencyContactName: String = "Not set",
+    val emergencyContactPhone: String = "",
+    val primaryVehicle: String = "",
     val isNumberMaskingEnabled: Boolean = true,
     val isGpsSharingEnabled: Boolean = true,
     val preferredLanguage: String = "en" // "en" or "hi"
@@ -22,6 +22,7 @@ interface ProfileRepository {
     fun toggleNumberMasking(enabled: Boolean)
     fun toggleGpsSharing(enabled: Boolean)
     fun setLanguage(langCode: String)
+    fun clearSession() {}
 }
 
 class PrototypeProfileRepository : ProfileRepository {
@@ -43,5 +44,9 @@ class PrototypeProfileRepository : ProfileRepository {
 
     override fun setLanguage(langCode: String) {
         _profile.value = _profile.value.copy(preferredLanguage = langCode)
+    }
+
+    override fun clearSession() {
+        _profile.value = UserProfileData()
     }
 }

@@ -233,8 +233,15 @@ fun ChatScreen(
                             },
                             shape = RoundedCornerShape(20.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = NavyDark,
-                                unfocusedBorderColor = Neutral300
+                                focusedTextColor = NavyDark,
+                                unfocusedTextColor = NavyDark,
+                                focusedContainerColor = PureWhite,
+                                unfocusedContainerColor = PureWhite,
+                                focusedBorderColor = EmergencyOrange,
+                                unfocusedBorderColor = Neutral300,
+                                focusedPlaceholderColor = Neutral500,
+                                unfocusedPlaceholderColor = Neutral500,
+                                cursorColor = EmergencyOrange
                             ),
                             maxLines = 3
                         )

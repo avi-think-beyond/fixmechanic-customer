@@ -80,6 +80,8 @@
     <string name="searching_mechanic_title">Locating Nearest Mechanics</string>
     <string name="searching_mechanic_desc">Reaching verified breakdown specialists within 5–7 km radius...</string>
     <string name="btn_cancel_request">Cancel Request</string>
+    <string name="no_mechanics_nearby_message">No mechanics are currently available near your location. Please try again shortly.</string>
+    <string name="scanning_nearby_mechanics">Scanning verified online mechanics near your breakdown spot...</string>
 
     <!-- Mechanic Assigned -->
     <string name="mechanic_assigned_title">Mechanic Assigned</string>

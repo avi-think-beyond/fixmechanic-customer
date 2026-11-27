@@ -207,8 +207,8 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Active Request Alert Banner (if there's a live request)
-            if (activeRequest != null && activeRequest?.status != JobStatus.COMPLETED && activeRequest?.status != JobStatus.CANCELLED) {
+            // Active Request Alert Banner (if there's a live non-terminal request)
+            if (activeRequest != null && activeRequest?.status?.isTerminal != true) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -340,7 +340,6 @@ fun HomeScreen(
                     modifier = Modifier
                         .weight(1f)
                         .clickable {
-                            emergencyViewModel.selectVehicleType(VehicleType.BIKE)
                             onStartEmergency(VehicleType.BIKE)
                         }
                         .testTag("home_select_bike"),
@@ -386,7 +385,6 @@ fun HomeScreen(
                     modifier = Modifier
                         .weight(1f)
                         .clickable {
-                            emergencyViewModel.selectVehicleType(VehicleType.CAR)
                             onStartEmergency(VehicleType.CAR)
                         }
                         .testTag("home_select_car"),
@@ -517,7 +515,6 @@ fun HomeScreen(
                     subtitle = "High-amp cables & booster pack",
                     price = "₹249",
                     onClick = {
-                        emergencyViewModel.selectVehicleType(VehicleType.CAR)
                         onStartEmergency(VehicleType.CAR)
                     }
                 )
@@ -526,7 +523,6 @@ fun HomeScreen(
                     subtitle = "Tubeless plug or spare tyre change",
                     price = "₹199",
                     onClick = {
-                        emergencyViewModel.selectVehicleType(VehicleType.BIKE)
                         onStartEmergency(VehicleType.BIKE)
                     }
                 )
@@ -535,7 +531,6 @@ fun HomeScreen(
                     subtitle = "Certified canister delivery to spot",
                     price = "₹199",
                     onClick = {
-                        emergencyViewModel.selectVehicleType(VehicleType.CAR)
                         onStartEmergency(VehicleType.CAR)
                     }
                 )

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 interface BackendStatusRepository {
     val status: StateFlow<BackendIntegrationStatus>
     fun refreshStatus()
+    fun clearSession() {}
 }
 
 class DefaultBackendStatusRepository : BackendStatusRepository {

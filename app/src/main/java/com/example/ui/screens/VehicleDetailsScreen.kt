@@ -151,8 +151,15 @@ fun VehicleDetailsScreen(
                 },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = NavyDark,
-                    unfocusedBorderColor = Neutral300
+                    focusedTextColor = NavyDark,
+                    unfocusedTextColor = NavyDark,
+                    focusedContainerColor = PureWhite,
+                    unfocusedContainerColor = PureWhite,
+                    focusedBorderColor = EmergencyOrange,
+                    unfocusedBorderColor = Neutral300,
+                    focusedPlaceholderColor = Neutral500,
+                    unfocusedPlaceholderColor = Neutral500,
+                    cursorColor = EmergencyOrange
                 )
             )
 
@@ -175,11 +182,18 @@ fun VehicleDetailsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("vehicle_reg_number_input"),
-                placeholder = { Text("e.g. DL 01 AB 1234 (Optional)") },
+                placeholder = { Text("e.g. DL 01 AB 1234 (Optional)", color = Neutral500) },
                 shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = NavyDark,
-                    unfocusedBorderColor = Neutral300
+                    focusedTextColor = NavyDark,
+                    unfocusedTextColor = NavyDark,
+                    focusedContainerColor = PureWhite,
+                    unfocusedContainerColor = PureWhite,
+                    focusedBorderColor = EmergencyOrange,
+                    unfocusedBorderColor = Neutral300,
+                    focusedPlaceholderColor = Neutral500,
+                    unfocusedPlaceholderColor = Neutral500,
+                    cursorColor = EmergencyOrange
                 )
             )
 
@@ -215,12 +229,19 @@ fun VehicleDetailsScreen(
                     .fillMaxWidth()
                     .height(110.dp)
                     .testTag("issue_description_input"),
-                placeholder = { Text(stringResource(id = R.string.issue_description_placeholder)) },
+                placeholder = { Text(stringResource(id = R.string.issue_description_placeholder), color = Neutral500) },
                 shape = RoundedCornerShape(12.dp),
                 maxLines = 4,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = NavyDark,
-                    unfocusedBorderColor = Neutral300
+                    focusedTextColor = NavyDark,
+                    unfocusedTextColor = NavyDark,
+                    focusedContainerColor = PureWhite,
+                    unfocusedContainerColor = PureWhite,
+                    focusedBorderColor = EmergencyOrange,
+                    unfocusedBorderColor = Neutral300,
+                    focusedPlaceholderColor = Neutral500,
+                    unfocusedPlaceholderColor = Neutral500,
+                    cursorColor = EmergencyOrange
                 )
             )
 

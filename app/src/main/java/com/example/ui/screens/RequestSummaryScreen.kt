@@ -34,19 +34,27 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
 import com.example.data.model.VehicleType
+import com.example.di.ServiceLocator
 import com.example.ui.components.FixMechanicTopBar
 import com.example.ui.components.SafetyGuidelineCard
 import com.example.ui.theme.EmergencyOrange
@@ -58,16 +66,50 @@ import com.example.ui.theme.Neutral300
 import com.example.ui.theme.Neutral500
 import com.example.ui.theme.Neutral900
 import com.example.ui.theme.PureWhite
+import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.viewmodel.EmergencyViewModel
+import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun RequestSummaryScreen(
     emergencyViewModel: EmergencyViewModel,
+    authViewModel: AuthViewModel = viewModel(),
     onBackClick: () -> Unit,
     onConfirmedDispatched: (String) -> Unit
 ) {
+    val context = LocalContext.current
     val state by emergencyViewModel.uiState.collectAsState()
+    val authState by authViewModel.uiState.collectAsState()
     val service = state.selectedService
+
+    val firebaseAuth = remember { ServiceLocator.firebaseAuth }
+    var currentFirebaseUser by remember { mutableStateOf(firebaseAuth.currentUser) }
+
+    DisposableEffect(firebaseAuth) {
+        val listener = FirebaseAuth.AuthStateListener { auth ->
+            currentFirebaseUser = auth.currentUser
+        }
+        firebaseAuth.addAuthStateListener(listener)
+        onDispose {
+            firebaseAuth.removeAuthStateListener(listener)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        emergencyViewModel.clearError()
+    }
+
+    LaunchedEffect(currentFirebaseUser) {
+        if (currentFirebaseUser != null) {
+            emergencyViewModel.clearError()
+        }
+    }
+
+    LaunchedEffect(authState.authRefreshCount) {
+        if (authState.authRefreshCount > 0) {
+            emergencyViewModel.refreshSession()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -183,17 +225,125 @@ fun RequestSummaryScreen(
 
             // Submission Error Banner
             if (state.errorMessage != null) {
+                val errText = state.errorMessage ?: ""
+                val isAuthOrPermIssue = errText.contains("denied", ignoreCase = true) ||
+                    errText.contains("permission", ignoreCase = true) ||
+                    errText.contains("Google", ignoreCase = true) ||
+                    errText.contains("session", ignoreCase = true) ||
+                    errText.contains("token", ignoreCase = true)
+
                 Spacer(modifier = Modifier.height(12.dp))
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp),
                     colors = CardDefaults.cardColors(containerColor = Color(0xFFFFEBEE))
                 ) {
-                    Text(
-                        text = state.errorMessage ?: "",
-                        style = MaterialTheme.typography.bodySmall.copy(color = EmergencyRed),
-                        modifier = Modifier.padding(12.dp)
-                    )
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = errText,
+                            style = MaterialTheme.typography.bodySmall.copy(color = EmergencyRed)
+                        )
+                        if (isAuthOrPermIssue && currentFirebaseUser != null) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    emergencyViewModel.clearError()
+                                    authViewModel.signInWithGoogle(context)
+                                },
+                                enabled = !authState.isLoading,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp)
+                                    .testTag("reverify_google_signin_button"),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = NavyDark)
+                            ) {
+                                if (authState.isLoading) {
+                                    CircularProgressIndicator(
+                                        color = PureWhite,
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Re-verify Google Sign-In",
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = PureWhite
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Inline Google Sign-In Gate if user didn't authenticate via Google yet
+            if (currentFirebaseUser == null) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("summary_google_signin_card"),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF7ED)),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, EmergencyOrange)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "Google Sign-In Required for Live Dispatch",
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = NavyDark
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "To authorize live Cloud Firestore dispatch under your customer account, sign in with Google below (your location and vehicle details stay saved).",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Neutral500,
+                                fontSize = 12.sp
+                            )
+                        )
+                        if (authState.errorMessage != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = authState.errorMessage ?: "",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = EmergencyRed,
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Button(
+                            onClick = { authViewModel.signInWithGoogle(context) },
+                            enabled = !authState.isLoading,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(46.dp)
+                                .testTag("summary_google_signin_button"),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = NavyDark)
+                        ) {
+                            if (authState.isLoading) {
+                                CircularProgressIndicator(
+                                    color = PureWhite,
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text(
+                                    text = "G   Continue with Google",
+                                    style = MaterialTheme.typography.labelLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = PureWhite
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -231,20 +381,27 @@ fun RequestSummaryScreen(
                                     color = Neutral500
                                 )
                             )
+                            val fallbackCoordText = if (state.location.latitude != null && state.location.longitude != null) {
+                                "Pinned Map Location (${"%.4f".format(state.location.latitude)}, ${"%.4f".format(state.location.longitude)})"
+                            } else {
+                                "Pinned Map Location"
+                            }
                             Text(
-                                text = state.location.address,
+                                text = state.location.address.ifBlank { fallbackCoordText },
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                 color = NavyDark
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Landmark: ${state.location.landmark}",
-                        style = MaterialTheme.typography.bodySmall.copy(color = Neutral500, fontSize = 12.sp),
-                        modifier = Modifier.padding(start = 48.dp)
-                    )
+                    if (state.location.landmark.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Landmark: ${state.location.landmark}",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Neutral500, fontSize = 12.sp),
+                            modifier = Modifier.padding(start = 48.dp)
+                        )
+                    }
                 }
             }
 
@@ -368,22 +525,30 @@ fun RequestSummaryScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Dispatch Button
+            // Dispatch Button (automatically initiates Google Sign-In if user isn't Firebase-authenticated yet)
+            val isBusy = state.isSubmitting || authState.isLoading
             Button(
                 onClick = {
-                    emergencyViewModel.submitEmergencyRequest { requestId ->
-                        onConfirmedDispatched(requestId)
+                    if (currentFirebaseUser == null) {
+                        emergencyViewModel.clearError()
+                        authViewModel.signInWithGoogle(context)
+                    } else {
+                        emergencyViewModel.submitEmergencyRequest { requestId ->
+                            onConfirmedDispatched(requestId)
+                        }
                     }
                 },
-                enabled = !state.isSubmitting,
+                enabled = !isBusy,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
                     .testTag("confirm_and_dispatch_button"),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = EmergencyOrange)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (currentFirebaseUser == null) NavyDark else EmergencyOrange
+                )
             ) {
-                if (state.isSubmitting) {
+                if (isBusy) {
                     CircularProgressIndicator(
                         color = PureWhite,
                         modifier = Modifier.size(24.dp),
@@ -398,7 +563,11 @@ fun RequestSummaryScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = stringResource(id = R.string.btn_confirm_dispatch),
+                            text = if (currentFirebaseUser == null) {
+                                "Sign in with Google & Dispatch"
+                            } else {
+                                stringResource(id = R.string.btn_confirm_dispatch)
+                            },
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = PureWhite

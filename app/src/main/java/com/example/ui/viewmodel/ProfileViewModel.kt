@@ -49,4 +49,10 @@ class ProfileViewModel(
     fun showBackendDialog(show: Boolean) {
         _uiState.update { it.copy(showBackendStatusDialog = show) }
     }
+
+    fun resetForLogout() {
+        profileRepository.clearSession()
+        backendStatusRepository.clearSession()
+        _uiState.value = ProfileUiState()
+    }
 }

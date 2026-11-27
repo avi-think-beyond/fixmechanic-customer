@@ -10,11 +10,13 @@ interface ChatRepository {
     fun observeMessages(jobId: String): StateFlow<List<ChatMessage>>
     suspend fun sendMessage(jobId: String, text: String, isCustomer: Boolean, jobStatus: JobStatus? = null): Result<ChatMessage>
     fun isJobSessionActive(jobStatus: JobStatus?): Boolean
+    fun clearSession() {}
 }
 
 class PrototypeChatRepository : ChatRepository {
 
     private val _messages = MutableStateFlow<Map<String, List<ChatMessage>>>(emptyMap())
+    private val flows = mutableMapOf<String, MutableStateFlow<List<ChatMessage>>>()
 
     override fun isJobSessionActive(jobStatus: JobStatus?): Boolean {
         if (jobStatus == null) return false
@@ -46,7 +48,11 @@ class PrototypeChatRepository : ChatRepository {
             _messages.value = currentMap + (jobId to initialList)
         }
 
-        return MutableStateFlow(_messages.value[jobId] ?: emptyList()).asStateFlow()
+        val flow = flows.getOrPut(jobId) {
+            MutableStateFlow(_messages.value[jobId] ?: emptyList())
+        }
+        flow.value = _messages.value[jobId] ?: emptyList()
+        return flow.asStateFlow()
     }
 
     override suspend fun sendMessage(
@@ -75,6 +81,13 @@ class PrototypeChatRepository : ChatRepository {
         val currentList = _messages.value[jobId] ?: emptyList()
         val updatedList = currentList + newMessage
         _messages.value = _messages.value + (jobId to updatedList)
+        flows[jobId]?.value = updatedList
         return Result.success(newMessage)
+    }
+
+    override fun clearSession() {
+        _messages.value = emptyMap()
+        flows.values.forEach { it.value = emptyList() }
+        flows.clear()
     }
 }
