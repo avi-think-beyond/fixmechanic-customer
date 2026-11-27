@@ -2,7 +2,22 @@ package com.example.data.model
 
 enum class VehicleType(val displayName: String, val hindiName: String) {
     BIKE("Motorcycle / Scooter", "मोटरसाइकिल / स्कूटर"),
-    CAR("Car / Four-Wheeler", "कार / चार पहिया वाहन")
+    CAR("Car / Four-Wheeler", "कार / चार पहिया वाहन");
+
+    fun toBackendVehicleType(): String = when (this) {
+        BIKE -> "TWO_WHEELER"
+        CAR -> "FOUR_WHEELER_CAR"
+    }
+
+    companion object {
+        fun fromBackendCode(raw: String?): VehicleType {
+            val s = (raw ?: "").trim().uppercase()
+            return when {
+                s.contains("TWO_WHEELER") || s == "BIKE" || s == "SCOOTER" || s == "2W" -> BIKE
+                else -> CAR
+            }
+        }
+    }
 }
 
 data class ServiceItem(
@@ -13,13 +28,24 @@ data class ServiceItem(
     val estimatedPriceInr: Int,
     val etaEstimateMinutes: Int,
     val description: String,
-    val categoryIcon: String // key for rendering icon
-)
+    val categoryIcon: String
+) {
+    fun toBackendServiceCategory(): String = when (id) {
+        "bike_puncture", "bike_tyre", "car_tyre" -> "FLAT_TYRE"
+        "bike_battery", "car_battery" -> "BATTERY_JUMPSTART"
+        "bike_fuel", "car_fuel" -> "FUEL_DELIVERY"
+        "bike_chain_clutch", "bike_chain", "bike_brake" -> "CLUTCH_BRAKE_CHAIN"
+        "car_lockout" -> "LOCKOUT"
+        "car_overheating" -> "OVERHEATING_COOLANT"
+        "bike_towing", "car_towing" -> "TOWING"
+        "bike_other", "car_other" -> "OTHER"
+        else -> "MINOR_MECHANICAL"
+    }
+}
 
 /**
- * Authoritative Job Status enum aligned with backend specifications:
- * REQUESTED, SEARCHING, ASSIGNED, ACCEPTED, EN_ROUTE, ARRIVED, IN_PROGRESS, COMPLETED, CANCELLED.
- * Also includes terminal dispatch search failure states: NO_MECHANIC_FOUND and EXPIRED.
+ * Authoritative Job Status enum aligned with unified FixMechanic backend:
+ * REQUESTED, SEARCHING, ASSIGNED, ACCEPTED, EN_ROUTE, ARRIVED, IN_PROGRESS, COMPLETED, CANCELLED, EXPIRED.
  */
 enum class JobStatus(
     val stepIndex: Int,
@@ -56,11 +82,14 @@ data class Mechanic(
     val rating: Float,
     val rescuesCompleted: Int,
     val vehicleInfo: String,
-    val phoneMasked: String = "+91 98XXX-XX321", // Masked proxy line for privacy
+    val phoneMasked: String = "+91-XXXXXX0000",
     val isVerified: Boolean = true,
     val photoUrl: String? = null,
     val currentDistanceKm: Float? = null,
-    val estimatedArrivalMinutes: Int? = null
+    val estimatedArrivalMinutes: Int? = null,
+    val currentLat: Double? = null,
+    val currentLng: Double? = null,
+    val locality: String = ""
 )
 
 data class ChatMessage(
@@ -104,6 +133,6 @@ data class BackendIntegrationStatus(
     val fcmAvailable: Boolean = false,
     val backendApiAvailable: Boolean = false,
     val isDemoMode: Boolean = false,
-    val activeEnvironment: String = "Firebase Spark (Live Firestore & Auth)",
-    val statusSummary: String = "Connected to live Cloud Firestore database: ai-studio-android-fixmecha-b0e3b2e8-05f1-4bf3-b32f-7f48ef3138b9."
+    val activeEnvironment: String = "Firebase Spark (Unified Firestore & Dispatch Server)",
+    val statusSummary: String = "Connected to shared Firebase project fixmechanic-firebase ((default) database)."
 )

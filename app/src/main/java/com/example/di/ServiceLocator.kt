@@ -1,7 +1,8 @@
 package com.example.di
 
 import android.content.Context
-import com.example.R
+import com.example.data.BackendApiClient
+import com.example.data.FirestoreProvider
 import com.example.data.repository.AiDiagnosisRepository
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.BackendStatusRepository
@@ -11,17 +12,15 @@ import com.example.data.repository.FirebaseAuthRepository
 import com.example.data.repository.FirestoreChatRepository
 import com.example.data.repository.FirestoreEmergencyRepository
 import com.example.data.repository.FirestoreProfileRepository
+import com.example.data.repository.GeminiAiAssistantRepository
 import com.example.data.repository.LiveBackendStatusRepository
 import com.example.data.repository.ProfileRepository
 import com.example.data.repository.RuleBasedAiDiagnosisRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 
-/**
- * ServiceLocator providing live Firebase-backed repositories configured with
- * the named custom database ID and Firebase Authentication.
- */
 object ServiceLocator {
+
     @Volatile
     private var appContext: Context? = null
 
@@ -37,12 +36,15 @@ object ServiceLocator {
         val ctx = checkNotNull(appContext) {
             "ServiceLocator must be initialized with Context by calling ServiceLocator.init(context)"
         }
-        val databaseId = ctx.getString(R.string.firestore_database_id)
-        FirebaseFirestore.getInstance(databaseId)
+        FirestoreProvider.createFirestore(ctx)
     }
 
     val firebaseAuth: FirebaseAuth by lazy {
         FirebaseAuth.getInstance()
+    }
+
+    val backendApiClient: BackendApiClient by lazy {
+        BackendApiClient(firebaseAuth)
     }
 
     val authRepository: AuthRepository by lazy {
@@ -50,11 +52,11 @@ object ServiceLocator {
     }
 
     val emergencyRepository: EmergencyRepository by lazy {
-        FirestoreEmergencyRepository(firestoreDb, firebaseAuth)
+        FirestoreEmergencyRepository(firestoreDb, firebaseAuth, backendApiClient)
     }
 
     val chatRepository: ChatRepository by lazy {
-        FirestoreChatRepository(firestoreDb, firebaseAuth)
+        FirestoreChatRepository(firestoreDb, firebaseAuth, backendApiClient)
     }
 
     val profileRepository: ProfileRepository by lazy {
@@ -62,10 +64,10 @@ object ServiceLocator {
     }
 
     val backendStatusRepository: BackendStatusRepository by lazy {
-        LiveBackendStatusRepository(firestoreDb, firebaseAuth)
+        LiveBackendStatusRepository(firestoreDb, firebaseAuth, backendApiClient)
     }
 
     val aiDiagnosisRepository: AiDiagnosisRepository by lazy {
-        com.example.data.repository.GeminiAiAssistantRepository(RuleBasedAiDiagnosisRepository())
+        GeminiAiAssistantRepository(RuleBasedAiDiagnosisRepository())
     }
 }

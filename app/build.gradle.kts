@@ -21,6 +21,7 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    buildConfigField("String", "BACKEND_BASE_URL", "\"http://10.0.2.2:5055\"")
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -112,6 +113,7 @@ dependencies {
   // Firestore and Firebase Auth with Credential Manager:
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
+  implementation(libs.firebase.messaging)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)

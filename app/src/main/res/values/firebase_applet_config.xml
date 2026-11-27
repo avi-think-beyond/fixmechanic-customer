@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <resources>
-    <string name="firestore_database_id" translatable="false">ai-studio-android-fixmecha-b0e3b2e8-05f1-4bf3-b32f-7f48ef3138b9</string>
+    <string name="firestore_database_id" translatable="false">(default)</string>
 </resources>

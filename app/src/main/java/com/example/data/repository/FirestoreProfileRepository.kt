@@ -1,27 +1,34 @@
 package com.example.data.repository
 
 import android.content.Context
-import com.example.R
+import com.example.data.FirestoreProvider
+import com.example.data.FirestoreProvider.awaitResult
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 class FirestoreProfileRepository(
     private val db: FirebaseFirestore,
     private val auth: FirebaseAuth = FirebaseAuth.getInstance()
 ) : ProfileRepository {
 
+    companion object {
+        private fun createFirestore(context: Context): FirebaseFirestore =
+            FirestoreProvider.createFirestore(context.applicationContext)
+
+        private fun createAuth(): FirebaseAuth = FirebaseAuth.getInstance()
+    }
+
     constructor(context: Context) : this(
-        FirebaseFirestore.getInstance(context.applicationContext.getString(R.string.firestore_database_id)),
-        FirebaseAuth.getInstance()
+        db = createFirestore(context),
+        auth = createAuth()
     )
 
     private val _profile = MutableStateFlow(UserProfileData())
@@ -44,10 +51,10 @@ class FirestoreProfileRepository(
                         if (snapshot != null && snapshot.exists()) {
                             _profile.value = UserProfileData(
                                 fullName = snapshot.getString("displayName") ?: user.displayName ?: "FixMechanic Customer",
-                                phoneNumber = snapshot.getString("phone") ?: user.phoneNumber ?: "+91 98XXX-XXXXX",
+                                phoneNumber = snapshot.getString("phone") ?: user.phoneNumber ?: "",
                                 email = snapshot.getString("email") ?: user.email ?: "",
                                 emergencyContactName = snapshot.getString("emergencyContactName") ?: "Family Contact",
-                                emergencyContactPhone = snapshot.getString("emergencyContactPhone") ?: "+91 98111 22334",
+                                emergencyContactPhone = snapshot.getString("emergencyContactPhone") ?: "",
                                 primaryVehicle = snapshot.getString("primaryVehicle") ?: "Vehicle",
                                 isNumberMaskingEnabled = snapshot.getBoolean("isNumberMaskingEnabled") ?: true,
                                 isGpsSharingEnabled = snapshot.getBoolean("isGpsSharingEnabled") ?: true,
@@ -68,7 +75,7 @@ class FirestoreProfileRepository(
         _profile.value = profile
         scope.launch {
             try {
-                db.collection("users").document(uid).update(
+                db.collection("users").document(uid).set(
                     mapOf(
                         "displayName" to profile.fullName,
                         "phone" to profile.phoneNumber,
@@ -79,9 +86,10 @@ class FirestoreProfileRepository(
                         "isNumberMaskingEnabled" to profile.isNumberMaskingEnabled,
                         "isGpsSharingEnabled" to profile.isGpsSharingEnabled,
                         "preferredLanguage" to profile.preferredLanguage,
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                ).await()
+                        "updatedAt" to System.currentTimeMillis()
+                    ),
+                    SetOptions.merge()
+                ).awaitResult()
             } catch (e: Exception) {
                 handleFirestoreError(e, OperationType.UPDATE, "users/$uid")
             }
@@ -89,17 +97,14 @@ class FirestoreProfileRepository(
     }
 
     override fun toggleNumberMasking(enabled: Boolean) {
-        val updated = _profile.value.copy(isNumberMaskingEnabled = enabled)
-        updateProfile(updated)
+        updateProfile(_profile.value.copy(isNumberMaskingEnabled = enabled))
     }
 
     override fun toggleGpsSharing(enabled: Boolean) {
-        val updated = _profile.value.copy(isGpsSharingEnabled = enabled)
-        updateProfile(updated)
+        updateProfile(_profile.value.copy(isGpsSharingEnabled = enabled))
     }
 
     override fun setLanguage(langCode: String) {
-        val updated = _profile.value.copy(preferredLanguage = langCode)
-        updateProfile(updated)
+        updateProfile(_profile.value.copy(preferredLanguage = langCode))
     }
 }

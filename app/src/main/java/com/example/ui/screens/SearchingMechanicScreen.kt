@@ -73,6 +73,7 @@ fun SearchingMechanicScreen(
     onCancelled: () -> Unit
 ) {
     val activeRequest by emergencyViewModel.activeRequest.collectAsState()
+    val nearbyMechanics by emergencyViewModel.nearbyMechanics.collectAsState()
     val status = activeRequest?.status
 
     // Status message cycling
@@ -88,6 +89,14 @@ fun SearchingMechanicScreen(
         while (true) {
             delay(1200)
             stepIndex = (stepIndex + 1) % statusSteps.size
+        }
+    }
+
+    // Periodically trigger Spark backend expiry / radius expansion check while searching
+    LaunchedEffect(status, activeRequest?.id) {
+        while (status == JobStatus.SEARCHING) {
+            delay(15000)
+            emergencyViewModel.triggerOfferExpiryCheck()
         }
     }
 
@@ -405,36 +414,16 @@ fun SearchingMechanicScreen(
                 )
             }
 
-            // Live Dispatch Testing Controller
             Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { emergencyViewModel.devAdvanceStatus(JobStatus.NO_MECHANIC_FOUND) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("All Busy", fontSize = 10.sp, maxLines = 1, color = PureWhite)
-                }
-
-                OutlinedButton(
-                    onClick = { emergencyViewModel.devAdvanceStatus(JobStatus.EXPIRED) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Expired", fontSize = 10.sp, maxLines = 1, color = PureWhite)
-                }
-
-                OutlinedButton(
-                    onClick = { emergencyViewModel.devAdvanceStatus(JobStatus.ASSIGNED) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text("Assign Unit", fontSize = 10.sp, maxLines = 1, color = PureWhite)
-                }
-            }
+            Text(
+                text = "${nearbyMechanics.size} online mechanic(s) visible on network • Waiting for acceptance",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = PureWhite.copy(alpha = 0.7f),
+                    fontSize = 11.sp
+                ),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }

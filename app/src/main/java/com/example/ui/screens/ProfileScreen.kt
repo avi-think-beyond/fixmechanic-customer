@@ -470,7 +470,7 @@ fun ProfileScreen(
 
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Architecture Note:\nConnected directly to live Cloud Firestore database (ai-studio-android-fixmecha-b0e3b2e8-05f1-4bf3-b32f-7f48ef3138b9) with enforced zero-trust security rules. Authenticated via Google Sign-In with real-time listeners for emergency requests, chat messaging, and customer profiles.",
+                            text = "Architecture Note:\nConnected to shared Firebase project fixmechanic-firebase ((default) database) and Spark Dispatch Server with enforced zero-trust security rules.",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = Neutral500)
                         )
                     }

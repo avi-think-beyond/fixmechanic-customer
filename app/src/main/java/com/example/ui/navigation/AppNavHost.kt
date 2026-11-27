@@ -93,7 +93,7 @@ fun AppNavHost(
                     // Handled inside Profile tab dialog or direct navigation
                 },
                 onLogout = {
-                    authViewModel.resetState()
+                    authViewModel.logout()
                     navController.navigate(Screen.Auth.route) {
                         popUpTo(Screen.Main.route) { inclusive = true }
                     }

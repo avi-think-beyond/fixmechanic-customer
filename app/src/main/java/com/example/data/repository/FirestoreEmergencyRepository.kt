@@ -1,8 +1,9 @@
 package com.example.data.repository
 
 import android.content.Context
-import android.util.Log
-import com.example.R
+import com.example.data.BackendApiClient
+import com.example.data.FirestoreProvider
+import com.example.data.FirestoreProvider.awaitResult
 import com.example.data.datasource.ServiceCatalog
 import com.example.data.model.EmergencyRequest
 import com.example.data.model.JobStatus
@@ -12,24 +13,30 @@ import com.example.data.model.StatusHistoryEntry
 import com.example.data.model.VehicleType
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import org.json.JSONObject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.tasks.await
 
 class FirestoreEmergencyRepository(
     private val db: FirebaseFirestore,
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+    private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
+    private val backendApiClient: BackendApiClient = BackendApiClient(auth)
 ) : EmergencyRepository {
 
+    companion object {
+        private fun createFirestore(context: Context): FirebaseFirestore =
+            FirestoreProvider.createFirestore(context.applicationContext)
+
+        private fun createAuth(): FirebaseAuth = FirebaseAuth.getInstance()
+    }
+
     constructor(context: Context) : this(
-        FirebaseFirestore.getInstance(context.applicationContext.getString(R.string.firestore_database_id)),
-        FirebaseAuth.getInstance()
+        db = createFirestore(context),
+        auth = createAuth(),
+        backendApiClient = BackendApiClient(createAuth())
     )
 
     override val isDemoMode: Boolean = false
@@ -40,7 +47,11 @@ class FirestoreEmergencyRepository(
     private val _requestHistory = MutableStateFlow<List<EmergencyRequest>>(emptyList())
     override val requestHistory: StateFlow<List<EmergencyRequest>> = _requestHistory.asStateFlow()
 
+    private val _nearbyMechanics = MutableStateFlow<List<Mechanic>>(emptyList())
+    override val nearbyMechanics: StateFlow<List<Mechanic>> = _nearbyMechanics.asStateFlow()
+
     private var requestsListener: ListenerRegistration? = null
+    private var mechanicsListener: ListenerRegistration? = null
     private var activeUserId: String? = null
 
     init {
@@ -52,6 +63,7 @@ class FirestoreEmergencyRepository(
                 stopListening()
             }
         }
+        auth.currentUser?.uid?.let { startListening(it) }
     }
 
     private fun startListening(userId: String) {
@@ -66,95 +78,158 @@ class FirestoreEmergencyRepository(
                     handleFirestoreError(error, OperationType.LIST, "serviceRequests")
                     return@addSnapshotListener
                 }
-
                 if (snapshots == null) return@addSnapshotListener
 
-                val allRequests = snapshots.documents.mapNotNull { parseRequest(it) }
+                val allRequests = snapshots.documents
+                    .mapNotNull { parseRequest(it) }
                     .sortedByDescending { it.createdAt }
 
                 _requestHistory.value = allRequests
 
-                // Active request is the latest one that is not in a terminal state
-                val active = allRequests.firstOrNull { !it.status.isTerminal }
+                // Keep COMPLETED requests active until customer submits rating so tracking auto-opens rating screen.
+                val active = allRequests.firstOrNull {
+                    !it.status.isTerminal || (it.status == JobStatus.COMPLETED && it.ratingGiven == null)
+                }
                 _activeRequest.value = active
+            }
+
+        mechanicsListener = db.collection("mechanicProfiles")
+            .whereEqualTo("approvalStatus", "APPROVED")
+            .whereEqualTo("isOnline", true)
+            .whereEqualTo("isBusy", false)
+            .addSnapshotListener { snapshots, error ->
+                if (error != null) {
+                    handleFirestoreError(error, OperationType.LIST, "mechanicProfiles")
+                    return@addSnapshotListener
+                }
+                if (snapshots == null) return@addSnapshotListener
+                val onlineMechanics = snapshots.documents.mapNotNull { parseAvailableMechanic(it) }
+                _nearbyMechanics.value = onlineMechanics
             }
     }
 
     private fun stopListening() {
         requestsListener?.remove()
         requestsListener = null
+        mechanicsListener?.remove()
+        mechanicsListener = null
         activeUserId = null
         _activeRequest.value = null
         _requestHistory.value = emptyList()
+        _nearbyMechanics.value = emptyList()
+    }
+
+    private fun parseAvailableMechanic(doc: DocumentSnapshot): Mechanic? {
+        val locMap = doc.get("currentLocation") as? Map<*, *>
+        val lat = (locMap?.get("lat") as? Number)?.toDouble()
+        val lng = (locMap?.get("lng") as? Number)?.toDouble()
+        val locality = locMap?.get("address") as? String ?: ""
+        val vehicleTypes = (doc.get("vehicleTypes") as? List<*>)
+            ?.mapNotNull { it as? String }
+            ?.joinToString(", ")
+            ?.ifBlank { "Bike & Car" }
+            ?: "Bike & Car"
+
+        return Mechanic(
+            id = doc.getString("mechanicId") ?: doc.id,
+            name = doc.getString("name") ?: "Verified Mechanic",
+            rating = (doc.get("ratingAverage") as? Number)?.toFloat() ?: 4.9f,
+            rescuesCompleted = (doc.get("totalCompletedJobs") as? Number)?.toInt() ?: 0,
+            vehicleInfo = doc.getString("workshopName")?.takeIf { it.isNotBlank() } ?: vehicleTypes,
+            phoneMasked = "+91-XXXXXX0000",
+            isVerified = true,
+            currentLat = lat,
+            currentLng = lng,
+            locality = locality
+        )
     }
 
     private fun parseRequest(doc: DocumentSnapshot): EmergencyRequest? {
-        val vehicleTypeStr = doc.getString("vehicleType") ?: "CAR"
-        val vehicleType = try {
-            VehicleType.valueOf(vehicleTypeStr.uppercase())
-        } catch (_: Exception) {
-            VehicleType.CAR
-        }
-
-        val issueTitle = doc.getString("issueCategory") ?: "General Breakdown"
+        val vehicleType = VehicleType.fromBackendCode(doc.getString("vehicleType"))
+        val issueTitle = doc.getString("issueTitle")
+            ?: doc.getString("issueCategory")
+            ?: doc.getString("serviceCategory")
+            ?: "Emergency Repair"
+        val serviceCategory = doc.getString("serviceCategory") ?: ""
         val services = ServiceCatalog.getServices(vehicleType)
-        val serviceItem = services.firstOrNull { it.title.equals(issueTitle, ignoreCase = true) }
-            ?: services.first()
+        val serviceItem = services.firstOrNull {
+            it.title.equals(issueTitle, ignoreCase = true) ||
+                it.toBackendServiceCategory().equals(serviceCategory, ignoreCase = true)
+        } ?: services.first()
 
-        val statusStr = doc.getString("status") ?: "REQUESTED"
-        val status = mapStringToStatus(statusStr)
+        val status = mapStringToStatus(doc.getString("status") ?: "REQUESTED")
 
         val locMap = doc.get("location") as? Map<*, *>
+        val lat = (locMap?.get("lat") as? Number)?.toDouble()
+            ?: (locMap?.get("latitude") as? Number)?.toDouble()
+        val lng = (locMap?.get("lng") as? Number)?.toDouble()
+            ?: (locMap?.get("longitude") as? Number)?.toDouble()
+
         val locationData = LocationData(
-            latitude = (locMap?.get("latitude") as? Number)?.toDouble(),
-            longitude = (locMap?.get("longitude") as? Number)?.toDouble(),
+            latitude = lat,
+            longitude = lng,
             address = locMap?.get("address") as? String ?: "",
             landmark = locMap?.get("landmark") as? String ?: "",
             city = locMap?.get("city") as? String ?: "",
             isGpsAccurate = locMap?.get("isGpsAccurate") as? Boolean ?: false,
-            isObtained = true
+            isObtained = (lat != null && lng != null) || !(locMap?.get("address") as? String).isNullOrBlank()
         )
 
         val assignedMechanicId = doc.getString("assignedMechanicId")
+        val mechLocMap = doc.get("assignedMechanicLocation") as? Map<*, *>
+        val mechLat = (mechLocMap?.get("lat") as? Number)?.toDouble()
+        val mechLng = (mechLocMap?.get("lng") as? Number)?.toDouble()
         val mechanic = if (!assignedMechanicId.isNullOrBlank()) {
             Mechanic(
                 id = assignedMechanicId,
                 name = doc.getString("assignedMechanicName") ?: "Assigned Mechanic",
-                rating = 4.8f,
-                rescuesCompleted = 120,
-                vehicleInfo = "FixMechanic Emergency Unit",
-                phoneMasked = doc.getString("assignedMechanicPhone") ?: "+91 98XXX-XX321",
-                isVerified = true
+                rating = 4.9f,
+                rescuesCompleted = 0,
+                vehicleInfo = "FixMechanic Verified Unit",
+                phoneMasked = doc.getString("assignedMechanicPhoneMasked")
+                    ?: doc.getString("assignedMechanicPhone")
+                    ?: "+91-XXXXXX0000",
+                isVerified = true,
+                currentLat = mechLat,
+                currentLng = mechLng,
+                locality = mechLocMap?.get("address") as? String ?: ""
             )
         } else null
 
-        val createdAtTs = doc.getTimestamp("createdAt")?.toDate()?.time
+        val createdAtMs = (doc.get("createdAt") as? Number)?.toLong()
+            ?: doc.getTimestamp("createdAt")?.toDate()?.time
             ?: System.currentTimeMillis()
+
+        val baseFee = (doc.get("estimatedPriceInr") as? Number)?.toInt()
+            ?: (doc.get("baseInspectionFee") as? Number)?.toInt()
+            ?: serviceItem.estimatedPriceInr
 
         return EmergencyRequest(
             id = doc.id,
             vehicleType = vehicleType,
             serviceItem = serviceItem,
             vehicleMakeModel = doc.getString("vehicleMakeModel") ?: "Vehicle",
-            registrationNumber = doc.getString("registrationNumber") ?: "",
+            registrationNumber = doc.getString("vehicleRegNumber")
+                ?: doc.getString("registrationNumber")
+                ?: "",
             issueDescription = doc.getString("description") ?: "",
-            photoUri = doc.getString("photoUri"),
+            photoUri = doc.getString("photoUri")?.takeIf { it.isNotBlank() },
             location = locationData,
             status = status,
             assignedMechanic = mechanic,
-            createdAt = createdAtTs,
-            baseInspectionFee = (doc.getLong("baseInspectionFee") ?: 249).toInt(),
-            finalPartsFee = (doc.getLong("finalPartsFee") ?: 0).toInt(),
-            totalPaid = (doc.getLong("totalPaid") ?: 0).toInt(),
-            ratingGiven = doc.getDouble("ratingGiven")?.toFloat(),
+            createdAt = createdAtMs,
+            baseInspectionFee = baseFee,
+            finalPartsFee = (doc.get("finalPartsFee") as? Number)?.toInt() ?: 0,
+            totalPaid = (doc.get("totalPaid") as? Number)?.toInt() ?: 0,
+            ratingGiven = (doc.get("ratingGiven") as? Number)?.toFloat(),
             feedbackComment = doc.getString("feedbackComment"),
-            statusHistory = listOf(StatusHistoryEntry(status, createdAtTs))
+            statusHistory = listOf(StatusHistoryEntry(status, createdAtMs))
         )
     }
 
-    private fun mapStringToStatus(status: String): JobStatus {
-        return when (status.uppercase()) {
-            "OPEN", "REQUESTED" -> JobStatus.REQUESTED
+    private fun mapStringToStatus(raw: String): JobStatus {
+        return when (raw.uppercase()) {
+            "REQUESTED" -> JobStatus.REQUESTED
             "SEARCHING" -> JobStatus.SEARCHING
             "ASSIGNED" -> JobStatus.ASSIGNED
             "ACCEPTED" -> JobStatus.ACCEPTED
@@ -170,65 +245,45 @@ class FirestoreEmergencyRepository(
     }
 
     override suspend fun submitEmergencyRequest(request: EmergencyRequest): Result<EmergencyRequest> {
-        val uid = auth.currentUser?.uid
-            ?: return Result.failure(IllegalStateException("User not authenticated with Firebase. Please sign in."))
+        auth.currentUser?.uid
+            ?: return Result.failure(IllegalStateException("Customer must be signed in with Firebase."))
+
+        val lat = request.location.latitude
+        val lng = request.location.longitude
+        if (lat == null || lng == null || lat.isNaN() || lng.isNaN() || (lat == 0.0 && lng == 0.0)) {
+            return Result.failure(
+                IllegalStateException("Valid GPS or geocoded coordinates are required before dispatching nearby mechanics.")
+            )
+        }
 
         return try {
-            val docRef = db.collection("serviceRequests").document()
-            val requestId = docRef.id
+            val payload = JSONObject()
+                .put("vehicleType", request.vehicleType.toBackendVehicleType())
+                .put("vehicleMakeModel", request.vehicleMakeModel)
+                .put("vehicleRegNumber", request.registrationNumber.ifBlank { "UNREGISTERED" })
+                .put("serviceCategory", request.serviceItem.toBackendServiceCategory())
+                .put("issueTitle", request.serviceItem.title)
+                .put("description", request.issueDescription)
+                .put("photoUri", request.photoUri ?: "")
+                .put("estimatedPriceInr", request.baseInspectionFee)
+                .put("lat", lat)
+                .put("lng", lng)
+                .put("address", request.location.address)
+                .put("landmark", request.location.landmark)
+                .put("city", request.location.city)
+                .put("isGpsAccurate", request.location.isGpsAccurate)
 
-            val locationMap = hashMapOf<String, Any?>(
-                "latitude" to (request.location.latitude ?: 0.0),
-                "longitude" to (request.location.longitude ?: 0.0),
-                "address" to request.location.address,
-                "landmark" to request.location.landmark,
-                "city" to request.location.city,
-                "isGpsAccurate" to request.location.isGpsAccurate
-            )
-
-            val payload = hashMapOf<String, Any?>(
-                "customerId" to uid,
-                "vehicleType" to request.vehicleType.name,
-                "vehicleMakeModel" to request.vehicleMakeModel,
-                "registrationNumber" to request.registrationNumber,
-                "issueCategory" to request.serviceItem.title,
-                "description" to request.issueDescription,
-                "photoUri" to (request.photoUri ?: ""),
-                "location" to locationMap,
-                "status" to "REQUESTED",
-                "assignedMechanicId" to null,
-                "assignedMechanicName" to null,
-                "assignedMechanicPhone" to null,
-                "baseInspectionFee" to request.baseInspectionFee,
-                "finalPartsFee" to 0,
-                "totalPaid" to 0,
-                "createdAt" to FieldValue.serverTimestamp(),
-                "updatedAt" to FieldValue.serverTimestamp()
-            )
-
-            docRef.set(payload).await()
-
-            // Record initial audit event
-            val eventRef = db.collection("requestEvents").document()
-            eventRef.set(
-                hashMapOf(
-                    "requestId" to requestId,
-                    "eventType" to "REQUEST_CREATED",
-                    "message" to "Roadside assistance request broadcasted to dispatch network",
-                    "status" to "REQUESTED",
-                    "actorId" to uid,
-                    "timestamp" to FieldValue.serverTimestamp()
-                )
-            ).await()
-
+            val result = backendApiClient.callFunction("createServiceRequest", payload)
+            val requestId = result.optString("requestId")
+            val statusStr = result.optString("status", "SEARCHING")
             val created = request.copy(
                 id = requestId,
-                status = JobStatus.REQUESTED
+                status = mapStringToStatus(statusStr)
             )
             _activeRequest.value = created
             Result.success(created)
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.CREATE, "serviceRequests")
+            handleFirestoreError(e, OperationType.CREATE, "createServiceRequest")
             Result.failure(e)
         }
     }
@@ -236,32 +291,21 @@ class FirestoreEmergencyRepository(
     override suspend fun cancelActiveRequest(): Result<Unit> {
         val active = _activeRequest.value
             ?: return Result.failure(IllegalStateException("No active emergency request to cancel."))
-        val uid = auth.currentUser?.uid
+        auth.currentUser?.uid
             ?: return Result.failure(IllegalStateException("User not authenticated."))
 
         return try {
-            db.collection("serviceRequests").document(active.id).update(
-                mapOf(
-                    "status" to "CANCELLED",
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
-
-            db.collection("requestEvents").document().set(
-                hashMapOf(
-                    "requestId" to active.id,
-                    "eventType" to "REQUEST_CANCELLED",
-                    "message" to "Request cancelled by customer",
-                    "status" to "CANCELLED",
-                    "actorId" to uid,
-                    "timestamp" to FieldValue.serverTimestamp()
-                )
-            ).await()
-
-            _activeRequest.value = active.copy(status = JobStatus.CANCELLED)
+            backendApiClient.callFunction(
+                "updateJobStatus",
+                JSONObject()
+                    .put("requestId", active.id)
+                    .put("targetStatus", "CANCELLED")
+                    .put("note", "Cancelled by customer")
+            )
+            _activeRequest.value = null
             Result.success(Unit)
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, "serviceRequests/${active.id}")
+            handleFirestoreError(e, OperationType.UPDATE, "updateJobStatus/${active.id}")
             Result.failure(e)
         }
     }
@@ -269,98 +313,60 @@ class FirestoreEmergencyRepository(
     override suspend fun retrySearch(): Result<Unit> {
         val active = _activeRequest.value
             ?: return Result.failure(IllegalStateException("No active request to retry."))
-        val uid = auth.currentUser?.uid ?: return Result.failure(IllegalStateException("Not logged in."))
+        auth.currentUser?.uid
+            ?: return Result.failure(IllegalStateException("Not logged in."))
 
         return try {
-            db.collection("serviceRequests").document(active.id).update(
-                mapOf(
-                    "status" to "SEARCHING",
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
-
-            db.collection("requestEvents").document().set(
-                hashMapOf(
-                    "requestId" to active.id,
-                    "eventType" to "SEARCH_RETRY",
-                    "message" to "Re-broadcasting to expanded mechanic radius",
-                    "status" to "SEARCHING",
-                    "actorId" to uid,
-                    "timestamp" to FieldValue.serverTimestamp()
-                )
-            ).await()
-
-            _activeRequest.value = active.copy(status = JobStatus.SEARCHING)
+            val res = backendApiClient.callFunction(
+                "retryServiceRequest",
+                JSONObject().put("requestId", active.id)
+            )
+            val statusStr = res.optString("status", "SEARCHING")
+            _activeRequest.value = active.copy(status = mapStringToStatus(statusStr))
             Result.success(Unit)
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, "serviceRequests/${active.id}")
+            handleFirestoreError(e, OperationType.UPDATE, "retryServiceRequest/${active.id}")
             Result.failure(e)
         }
     }
 
-    override suspend fun transitionJobStatus(nextStatus: JobStatus) {
-        val active = _activeRequest.value ?: return
-        val uid = auth.currentUser?.uid ?: return
+    override suspend fun triggerOfferExpiryCheck(): Result<Unit> {
+        val active = _activeRequest.value ?: return Result.success(Unit)
+        if (active.status != JobStatus.SEARCHING) return Result.success(Unit)
+        auth.currentUser?.uid ?: return Result.success(Unit)
 
-        try {
-            db.collection("serviceRequests").document(active.id).update(
-                mapOf(
-                    "status" to nextStatus.name,
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
-
-            db.collection("requestEvents").document().set(
-                hashMapOf(
-                    "requestId" to active.id,
-                    "eventType" to "STATUS_CHANGE",
-                    "message" to "Status progressed to ${nextStatus.label}",
-                    "status" to nextStatus.name,
-                    "actorId" to uid,
-                    "timestamp" to FieldValue.serverTimestamp()
-                )
-            ).await()
-
-            _activeRequest.value = active.copy(status = nextStatus)
+        return try {
+            val res = backendApiClient.callFunction(
+                "triggerOfferExpiryCheck",
+                JSONObject().put("requestId", active.id)
+            )
+            if (res.optBoolean("expired", false)) {
+                _activeRequest.value = active.copy(status = JobStatus.EXPIRED)
+            }
+            Result.success(Unit)
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, "serviceRequests/${active.id}")
+            Result.failure(e)
         }
     }
 
     override suspend fun completeJob(rating: Float, comment: String): Result<Unit> {
         val active = _activeRequest.value
             ?: return Result.failure(IllegalStateException("No active request to review."))
-        val uid = auth.currentUser?.uid
+        auth.currentUser?.uid
             ?: return Result.failure(IllegalStateException("User not authenticated."))
 
         return try {
-            // Write to reviews collection
-            val reviewDoc = db.collection("reviews").document()
-            reviewDoc.set(
-                hashMapOf(
-                    "requestId" to active.id,
-                    "customerId" to uid,
-                    "mechanicId" to (active.assignedMechanic?.id ?: "mechanic_assigned"),
-                    "rating" to rating.toDouble(),
-                    "comment" to comment,
-                    "createdAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
-
-            // Update service request
-            db.collection("serviceRequests").document(active.id).update(
-                mapOf(
-                    "status" to "COMPLETED",
-                    "ratingGiven" to rating.toDouble(),
-                    "feedbackComment" to comment,
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
-
+            backendApiClient.callFunction(
+                "submitJobRating",
+                JSONObject()
+                    .put("requestId", active.id)
+                    .put("score", rating.toDouble())
+                    .put("feedback", comment)
+            )
             _activeRequest.value = null
             Result.success(Unit)
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.CREATE, "reviews")
+            handleFirestoreError(e, OperationType.CREATE, "submitJobRating")
             Result.failure(e)
         }
     }

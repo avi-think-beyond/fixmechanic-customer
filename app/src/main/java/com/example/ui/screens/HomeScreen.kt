@@ -81,6 +81,7 @@ fun HomeScreen(
 ) {
     val emergencyState by emergencyViewModel.uiState.collectAsState()
     val activeRequest by emergencyViewModel.activeRequest.collectAsState()
+    val nearbyMechanics by emergencyViewModel.nearbyMechanics.collectAsState()
 
     Column(
         modifier = Modifier
@@ -186,7 +187,7 @@ fun HomeScreen(
                                 )
                             )
                             Text(
-                                text = "${emergencyState.location.address}, ${emergencyState.location.city}",
+                                text = if (emergencyState.location.address.isNotBlank()) "${emergencyState.location.address}, ${emergencyState.location.city}" else "${nearbyMechanics.size} verified mechanic(s) online nearby",
                                 style = MaterialTheme.typography.bodySmall.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     color = PureWhite
@@ -256,6 +257,58 @@ fun HomeScreen(
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // Live Nearby Mechanics Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+                    .testTag("nearby_mechanics_card"),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = PureWhite),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(if (nearbyMechanics.isNotEmpty()) SafetyGreen.copy(alpha = 0.15f) else Color(0xFFF1F5F9)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = null,
+                            tint = if (nearbyMechanics.isNotEmpty()) SafetyGreen else Neutral500,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (nearbyMechanics.isNotEmpty()) {
+                                "${nearbyMechanics.size} Verified Mechanic(s) Online Now"
+                            } else {
+                                "Dispatch Network Active"
+                            },
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = NavyDark
+                        )
+                        val preview = nearbyMechanics.take(2).joinToString(" • ") {
+                            val area = it.locality.ifBlank { "Nearby" }
+                            "${it.name} ($area)"
+                        }
+                        Text(
+                            text = if (preview.isNotBlank()) preview else "Mechanics ready across service zones",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = Neutral500),
+                            maxLines = 1
+                        )
+                    }
+                }
             }
 
             // PRIMARY EMERGENCY ACTION BUTTON

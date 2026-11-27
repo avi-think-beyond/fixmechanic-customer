@@ -7,8 +7,8 @@ import com.example.data.datasource.ServiceCatalog
 import com.example.data.location.LocationFetchResult
 import com.example.data.location.LocationHelper
 import com.example.data.model.EmergencyRequest
-import com.example.data.model.JobStatus
 import com.example.data.model.LocationData
+import com.example.data.model.Mechanic
 import com.example.data.model.ServiceItem
 import com.example.data.model.VehicleType
 import com.example.data.repository.EmergencyRepository
@@ -23,10 +23,10 @@ import kotlinx.coroutines.launch
 
 data class EmergencyUiState(
     val selectedVehicleType: VehicleType = VehicleType.CAR,
-    val selectedService: ServiceItem? = ServiceCatalog.carServices.first(),
+    val selectedService: ServiceItem? = ServiceCatalog.carServices.firstOrNull(),
     val location: LocationData = LocationData(),
-    val isLocationLoading: Boolean = false,
     val isLocationPermissionGranted: Boolean = false,
+    val isLocationLoading: Boolean = false,
     val isGpsDisabled: Boolean = false,
     val locationErrorMessage: String? = null,
     val isManualLocationMode: Boolean = false,
@@ -51,6 +51,9 @@ class EmergencyViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val requestHistory: StateFlow<List<EmergencyRequest>> = emergencyRepository.requestHistory
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val nearbyMechanics: StateFlow<List<Mechanic>> = emergencyRepository.nearbyMechanics
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun selectVehicleType(type: VehicleType) {
@@ -86,9 +89,7 @@ class EmergencyViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLocationLoading = true, locationErrorMessage = null, isGpsDisabled = false) }
             val helper = LocationHelper(context.applicationContext)
-            val result = helper.getCurrentLocation()
-
-            when (result) {
+            when (val result = helper.getCurrentLocation()) {
                 is LocationFetchResult.Success -> {
                     _uiState.update {
                         it.copy(
@@ -137,35 +138,45 @@ class EmergencyViewModel(
     }
 
     fun onManualAddressChanged(address: String) {
-        _uiState.update { it.copy(manualAddressInput = address, errorMessage = null) }
+        _uiState.update { it.copy(manualAddressInput = address, errorMessage = null, locationErrorMessage = null) }
     }
 
     fun onManualLandmarkChanged(landmark: String) {
         _uiState.update { it.copy(manualLandmarkInput = landmark) }
     }
 
-    fun saveManualLocation() {
+    fun saveManualLocation(context: Context? = null) {
         val address = _uiState.value.manualAddressInput.trim()
         val landmark = _uiState.value.manualLandmarkInput.trim()
         if (address.isEmpty()) {
-            _uiState.update { it.copy(errorMessage = "Please enter breakdown street, highway, or area address.") }
+            _uiState.update { it.copy(locationErrorMessage = "Please enter breakdown street, highway, or area address.") }
             return
         }
-        _uiState.update {
-            it.copy(
-                location = LocationData(
-                    latitude = null, // Do not pretend coordinates if not obtained via GPS!
-                    longitude = null,
-                    address = address,
-                    landmark = landmark,
-                    city = "India",
-                    isGpsAccurate = false,
-                    isObtained = true
-                ),
-                isManualLocationMode = false,
-                locationErrorMessage = null,
-                errorMessage = null
-            )
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLocationLoading = true, locationErrorMessage = null) }
+            val geocoded = if (context != null) {
+                LocationHelper(context.applicationContext).forwardGeocode(address, landmark)
+            } else {
+                null
+            }
+            if (geocoded == null || geocoded.latitude == null || geocoded.longitude == null) {
+                _uiState.update {
+                    it.copy(
+                        isLocationLoading = false,
+                        locationErrorMessage = "Could not resolve map coordinates for \"$address\". Include city/sector (e.g., Sector 29, Gurugram) or tap Use Current Location."
+                    )
+                }
+                return@launch
+            }
+            _uiState.update {
+                it.copy(
+                    isLocationLoading = false,
+                    location = geocoded,
+                    isManualLocationMode = false,
+                    locationErrorMessage = null,
+                    errorMessage = null
+                )
+            }
         }
     }
 
@@ -190,16 +201,17 @@ class EmergencyViewModel(
             _uiState.update { it.copy(errorMessage = "Please choose a breakdown service.") }
             return
         }
-
-        if (!state.location.isObtained && state.location.address.isBlank()) {
-            _uiState.update { it.copy(errorMessage = "Please confirm your breakdown location or enter address manually.") }
+        if (state.location.latitude == null || state.location.longitude == null) {
+            _uiState.update {
+                it.copy(errorMessage = "Please confirm GPS coordinates or save a valid breakdown address first.")
+            }
             return
         }
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
             val newRequest = EmergencyRequest(
-                id = "", // Will be assigned authoritative ID in repository
+                id = "",
                 vehicleType = state.selectedVehicleType,
                 serviceItem = service,
                 vehicleMakeModel = state.vehicleMakeModel.ifBlank { "Vehicle" },
@@ -209,7 +221,6 @@ class EmergencyViewModel(
                 location = state.location,
                 baseInspectionFee = service.estimatedPriceInr
             )
-
             val result = emergencyRepository.submitEmergencyRequest(newRequest)
             _uiState.update { it.copy(isSubmitting = false) }
             result.onSuccess {
@@ -226,17 +237,17 @@ class EmergencyViewModel(
         }
     }
 
+    fun triggerOfferExpiryCheck() {
+        viewModelScope.launch {
+            emergencyRepository.triggerOfferExpiryCheck()
+        }
+    }
+
     fun cancelActiveRequest(onCancelled: () -> Unit) {
         viewModelScope.launch {
             emergencyRepository.cancelActiveRequest().onSuccess {
                 onCancelled()
             }
-        }
-    }
-
-    fun devAdvanceStatus(nextStatus: JobStatus) {
-        viewModelScope.launch {
-            emergencyRepository.transitionJobStatus(nextStatus)
         }
     }
 
