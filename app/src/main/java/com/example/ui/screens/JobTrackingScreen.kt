@@ -159,7 +159,29 @@ fun JobTrackingScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Live Map showing customer breakdown spot and assigned mechanic's live location
+            if (request?.location?.latitude != null && request.location.longitude != null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    com.example.ui.components.LiveDispatchMap(
+                        customerLat = request.location.latitude,
+                        customerLng = request.location.longitude,
+                        customerLabel = request.location.address.ifBlank { "Your Breakdown Spot" },
+                        mechanics = listOfNotNull(mechanic),
+                        showSearchRadius = false,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             // ASSIGNED MECHANIC PROFILE CARD
             if (mechanic != null) {

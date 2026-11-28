@@ -17,7 +17,9 @@ interface EmergencyRepository {
     suspend fun cancelActiveRequest(): Result<Unit>
     suspend fun retrySearch(): Result<Unit>
     suspend fun triggerOfferExpiryCheck(): Result<Unit>
-    suspend fun completeJob(rating: Float, comment: String): Result<Unit>
+    suspend fun completeJob(rating: Float, comment: String, paymentMethod: String = "UPI"): Result<Unit>
+    fun refreshSession() {}
+    fun clearSession() {}
 }
 
 class PrototypeEmergencyRepository : EmergencyRepository {
@@ -41,6 +43,12 @@ class PrototypeEmergencyRepository : EmergencyRepository {
 
     override suspend fun triggerOfferExpiryCheck(): Result<Unit> = Result.success(Unit)
 
-    override suspend fun completeJob(rating: Float, comment: String): Result<Unit> =
+    override suspend fun completeJob(rating: Float, comment: String, paymentMethod: String): Result<Unit> =
         Result.failure(IllegalStateException("Prototype mode disabled."))
+
+    override fun clearSession() {
+        _activeRequest.value = null
+        _requestHistory.value = emptyList()
+        _nearbyMechanics.value = emptyList()
+    }
 }

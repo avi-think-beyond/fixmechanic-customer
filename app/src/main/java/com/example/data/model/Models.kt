@@ -89,8 +89,15 @@ data class Mechanic(
     val estimatedArrivalMinutes: Int? = null,
     val currentLat: Double? = null,
     val currentLng: Double? = null,
-    val locality: String = ""
-)
+    val locality: String = "",
+    val isOnline: Boolean = true,
+    val isAvailable: Boolean = true,
+    val isBlocked: Boolean = false,
+    val serviceRadiusKm: Double? = null
+) {
+    val latitude: Double? get() = currentLat
+    val longitude: Double? get() = currentLng
+}
 
 data class ChatMessage(
     val id: String,
@@ -134,5 +141,5 @@ data class BackendIntegrationStatus(
     val backendApiAvailable: Boolean = false,
     val isDemoMode: Boolean = false,
     val activeEnvironment: String = "Firebase Spark (Unified Firestore & Dispatch Server)",
-    val statusSummary: String = "Connected to shared Firebase project fixmechanic-firebase ((default) database)."
+    val statusSummary: String = "Connected to Firebase Firestore database ai-studio-android-e98a79eb-e2fe-4b16-a049-c442e6f88e9e."
 )

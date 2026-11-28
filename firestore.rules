@@ -9,27 +9,28 @@ service cloud.firestore {
     function hasRoleInUsersDoc(roleName) {
       return isAuthenticated() &&
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        ('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == roleName;
     }
 
     function isAdmin() {
       return isAuthenticated() && (
-        request.auth.token.role == 'ADMIN' ||
-        request.auth.token.admin == true ||
+        ('role' in request.auth.token && request.auth.token.role == 'ADMIN') ||
+        ('admin' in request.auth.token && request.auth.token.admin == true) ||
         hasRoleInUsersDoc('ADMIN')
       );
     }
 
     function isMechanic() {
       return isAuthenticated() && (
-        request.auth.token.role == 'MECHANIC' ||
+        ('role' in request.auth.token && request.auth.token.role == 'MECHANIC') ||
         hasRoleInUsersDoc('MECHANIC')
       );
     }
 
     function isCustomer() {
       return isAuthenticated() && (
-        request.auth.token.role == 'CUSTOMER' ||
+        ('role' in request.auth.token && request.auth.token.role == 'CUSTOMER') ||
         hasRoleInUsersDoc('CUSTOMER')
       );
     }
@@ -44,12 +45,15 @@ service cloud.firestore {
     }
 
     // 1. users
-    // Authenticated users can read their own user profile; admins can read all
-    // Clients can NEVER escalate to ADMIN or alter disabled flag directly
+    // Authenticated users can create & manage their own user profile; admins can manage all.
+    // Clients can NEVER escalate to ADMIN or alter disabled flag directly.
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) &&
-        (request.resource.data.role == 'CUSTOMER' || request.resource.data.role == 'MECHANIC');
+      allow create: if (isOwner(userId) &&
+        ('role' in request.resource.data) &&
+        (request.resource.data.role == 'CUSTOMER' || request.resource.data.role == 'MECHANIC') &&
+        (!('disabled' in request.resource.data) || request.resource.data.disabled == false)) ||
+        isAdmin();
       allow update: if (isOwner(userId) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'disabled'])) ||
         isAdmin();
@@ -59,19 +63,20 @@ service cloud.firestore {
     // 2. customerProfiles
     match /customerProfiles/{customerId} {
       allow read: if isOwner(customerId) || isAdmin();
-      allow create, update: if isOwner(customerId);
+      allow create, update: if isOwner(customerId) || isAdmin();
       allow delete: if isAdmin();
     }
 
     // 3. mechanicProfiles
-    // Create: initial registration strictly in PENDING status and offline
-    // Update: mechanic can only update non-privileged fields and can only go online when APPROVED
+    // Create: initial registration strictly in PENDING status and offline.
+    // Update: mechanic can only update non-privileged fields and can only go online when APPROVED.
     match /mechanicProfiles/{mechanicId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(mechanicId) &&
+      allow create: if (isOwner(mechanicId) &&
         request.resource.data.approvalStatus == 'PENDING' &&
         (!('isOnline' in request.resource.data) || request.resource.data.isOnline == false) &&
-        (!('isBusy' in request.resource.data) || request.resource.data.isBusy == false);
+        (!('isBusy' in request.resource.data) || request.resource.data.isBusy == false)) ||
+        isAdmin();
       allow update: if (isOwner(mechanicId) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'approvalStatus',
@@ -105,31 +110,73 @@ service cloud.firestore {
     }
 
     // 5. serviceRequests
-    // Privileged mutations (creation, dispatch, assignment, status transitions) MUST go through Backend API
+    // Strict owner/participant/admin boundaries supporting direct Cloud Firestore dispatch.
+    // Customer/participant checks are evaluated BEFORE isAdmin() to avoid unnecessary user-doc lookups.
     match /serviceRequests/{requestId} {
       allow read: if isAuthenticated() && (
-        resource.data.customerId == request.auth.uid ||
-        resource.data.assignedMechanicId == request.auth.uid ||
+        ('customerId' in resource.data && resource.data.customerId == request.auth.uid) ||
+        ('assignedMechanicId' in resource.data && resource.data.assignedMechanicId == request.auth.uid) ||
+        (isMechanic() && resource.data.status in ['REQUESTED', 'SEARCHING']) ||
         isAdmin()
       );
-      allow write: if isAdmin();
+      allow create: if (
+        isAuthenticated() &&
+        ('customerId' in request.resource.data) &&
+        request.resource.data.customerId == request.auth.uid &&
+        ('status' in request.resource.data) &&
+        request.resource.data.status in ['REQUESTED', 'SEARCHING'] &&
+        (!('assignedMechanicId' in request.resource.data) || request.resource.data.assignedMechanicId == null)
+      ) || isAdmin();
+      allow update: if (
+        isAuthenticated() &&
+        request.resource.data.customerId == resource.data.customerId && (
+          // Customer owner may cancel, retry search, or attach rating/feedback without altering ownership or assignment
+          (resource.data.customerId == request.auth.uid &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['customerId', 'assignedMechanicId']) &&
+            (request.resource.data.status == resource.data.status ||
+             request.resource.data.status in ['CANCELLED', 'SEARCHING'])) ||
+          // Assigned mechanic may update job lifecycle status and live location
+          (('assignedMechanicId' in resource.data) &&
+            resource.data.assignedMechanicId == request.auth.uid &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['customerId'])) ||
+          // Approved mechanic may accept an unassigned open request
+          (isMechanic() &&
+            resource.data.status in ['REQUESTED', 'SEARCHING'] &&
+            (!('assignedMechanicId' in resource.data) || resource.data.assignedMechanicId == null) &&
+            request.resource.data.assignedMechanicId == request.auth.uid &&
+            request.resource.data.status in ['ASSIGNED', 'ACCEPTED'])
+        )
+      ) || isAdmin();
+      allow delete: if isAdmin();
     }
 
     // 6. jobOffers
-    // Mechanics can ONLY read offers targeted specifically to their mechanicId
+    // Mechanics can read/respond to offers targeted to them; request customer can dispatch offers for their own request.
     match /jobOffers/{offerId} {
       allow read: if isAuthenticated() && (
-        resource.data.mechanicId == request.auth.uid ||
+        ('mechanicId' in resource.data && resource.data.mechanicId == request.auth.uid) ||
+        ('customerId' in resource.data && resource.data.customerId == request.auth.uid) ||
         isAdmin()
       );
-      allow write: if isAdmin();
+      allow create: if (
+        isAuthenticated() &&
+        request.resource.data.customerId == request.auth.uid &&
+        request.resource.data.status == 'PENDING'
+      ) || isAdmin();
+      allow update: if (
+        isAuthenticated() &&
+        request.resource.data.customerId == resource.data.customerId &&
+        request.resource.data.mechanicId == resource.data.mechanicId &&
+        (resource.data.mechanicId == request.auth.uid || resource.data.customerId == request.auth.uid)
+      ) || isAdmin();
+      allow delete: if isAdmin();
     }
 
     // 7. jobAssignments
     match /jobAssignments/{requestId} {
       allow read: if isAuthenticated() && (
-        resource.data.customerId == request.auth.uid ||
-        resource.data.mechanicId == request.auth.uid ||
+        ('customerId' in resource.data && resource.data.customerId == request.auth.uid) ||
+        ('mechanicId' in resource.data && resource.data.mechanicId == request.auth.uid) ||
         isAdmin()
       );
       allow write: if isAdmin();
@@ -138,7 +185,7 @@ service cloud.firestore {
     // 8. jobStatusEvents
     match /jobStatusEvents/{eventId} {
       allow read: if isAuthenticated() && (
-        resource.data.actorId == request.auth.uid ||
+        ('actorId' in resource.data && resource.data.actorId == request.auth.uid) ||
         isAdmin()
       );
       allow write: if isAdmin();
@@ -147,22 +194,39 @@ service cloud.firestore {
     // 9. jobChats and jobMessages
     match /jobChats/{requestId} {
       allow read: if isAuthenticated() && (
-        resource.data.customerId == request.auth.uid ||
-        resource.data.mechanicId == request.auth.uid ||
+        ('customerId' in resource.data && resource.data.customerId == request.auth.uid) ||
+        ('mechanicId' in resource.data && resource.data.mechanicId == request.auth.uid) ||
         isAdmin()
       );
-      allow write: if isAdmin();
+      allow create: if (
+        isAuthenticated() &&
+        request.resource.data.customerId == request.auth.uid
+      ) || isAdmin();
+      allow update: if (
+        isAuthenticated() &&
+        request.resource.data.customerId == resource.data.customerId && (
+          resource.data.customerId == request.auth.uid ||
+          ('mechanicId' in resource.data && resource.data.mechanicId == request.auth.uid) ||
+          (isMechanic() && (!('mechanicId' in resource.data) || resource.data.mechanicId == null))
+        )
+      ) || isAdmin();
+      allow delete: if isAdmin();
 
       match /jobMessages/{messageId} {
         allow read: if isAuthenticated() && (
-          get(/databases/$(database)/documents/jobChats/$(requestId)).data.customerId == request.auth.uid ||
-          get(/databases/$(database)/documents/jobChats/$(requestId)).data.mechanicId == request.auth.uid ||
+          (exists(/databases/$(database)/documents/jobChats/$(requestId)) && (
+            get(/databases/$(database)/documents/jobChats/$(requestId)).data.customerId == request.auth.uid ||
+            ('mechanicId' in get(/databases/$(database)/documents/jobChats/$(requestId)).data &&
+              get(/databases/$(database)/documents/jobChats/$(requestId)).data.mechanicId == request.auth.uid)
+          )) ||
           isAdmin()
         );
         allow create: if isAuthenticated() &&
+          exists(/databases/$(database)/documents/jobChats/$(requestId)) &&
           get(/databases/$(database)/documents/jobChats/$(requestId)).data.status == 'OPEN' &&
           (get(/databases/$(database)/documents/jobChats/$(requestId)).data.customerId == request.auth.uid ||
-           get(/databases/$(database)/documents/jobChats/$(requestId)).data.mechanicId == request.auth.uid) &&
+           ('mechanicId' in get(/databases/$(database)/documents/jobChats/$(requestId)).data &&
+             get(/databases/$(database)/documents/jobChats/$(requestId)).data.mechanicId == request.auth.uid)) &&
           request.resource.data.senderId == request.auth.uid;
         allow update, delete: if isAdmin();
       }
@@ -171,15 +235,27 @@ service cloud.firestore {
     // 10. ratings
     match /ratings/{ratingId} {
       allow read: if isAuthenticated();
-      allow create: if isCustomer() && request.resource.data.customerId == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow create: if (isAuthenticated() && request.resource.data.customerId == request.auth.uid) || isAdmin();
+      allow update: if (isAuthenticated() &&
+        resource.data.customerId == request.auth.uid &&
+        request.resource.data.customerId == request.auth.uid) || isAdmin();
+      allow delete: if isAdmin();
     }
 
     // 11. deviceTokens
     match /deviceTokens/{tokenId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin();
-      allow create, update: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow delete: if isOwner(resource.data.userId) || isAdmin();
+      allow read: if (isAuthenticated() && (
+        tokenId == request.auth.uid + '_android' ||
+        (resource != null && isOwner(resource.data.userId))
+      )) || isAdmin();
+      allow create: if (isAuthenticated() && request.resource.data.userId == request.auth.uid) || isAdmin();
+      allow update: if (isAuthenticated() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == request.auth.uid) || isAdmin();
+      allow delete: if (isAuthenticated() && (
+        tokenId == request.auth.uid + '_android' ||
+        (resource != null && isOwner(resource.data.userId))
+      )) || isAdmin();
     }
 
     // 12. adminAuditLogs

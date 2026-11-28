@@ -22,6 +22,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,13 +44,23 @@ import com.example.ui.viewmodel.ProfileViewModel
 fun MainScreen(
     emergencyViewModel: EmergencyViewModel,
     profileViewModel: ProfileViewModel,
+    openProfileForNewUser: Boolean = false,
+    onProfileSetupCompleted: () -> Unit = {},
     onStartEmergency: (VehicleType) -> Unit,
     onOpenActiveJob: () -> Unit,
     onOpenAiDiagnoser: () -> Unit,
     onOpenBackendStatus: () -> Unit,
     onLogout: () -> Unit
 ) {
-    var selectedTab by remember { mutableStateOf(MainTab.HOME) }
+    var selectedTab by remember {
+        mutableStateOf(if (openProfileForNewUser) MainTab.PROFILE else MainTab.HOME)
+    }
+
+    LaunchedEffect(openProfileForNewUser) {
+        if (openProfileForNewUser) {
+            selectedTab = MainTab.PROFILE
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -162,6 +173,15 @@ fun MainScreen(
 
                 MainTab.PROFILE -> ProfileScreen(
                     profileViewModel = profileViewModel,
+                    isNewUserSetup = openProfileForNewUser,
+                    onProfileSavedAndContinue = {
+                        onProfileSetupCompleted()
+                        selectedTab = MainTab.HOME
+                    },
+                    onSkipProfileSetup = {
+                        onProfileSetupCompleted()
+                        selectedTab = MainTab.HOME
+                    },
                     onLogout = onLogout
                 )
             }

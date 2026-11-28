@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,16 +25,9 @@ import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.ContactPhone
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PrivacyTip
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.SyncProblem
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -57,18 +51,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.R
 import com.example.ui.components.FixMechanicTopBar
 import com.example.ui.theme.EmergencyOrange
 import com.example.ui.theme.EmergencyRed
 import com.example.ui.theme.NavyDark
 import com.example.ui.theme.NavySurface
 import com.example.ui.theme.Neutral100
-import com.example.ui.theme.Neutral300
 import com.example.ui.theme.Neutral500
 import com.example.ui.theme.Neutral800
 import com.example.ui.theme.Neutral900
@@ -80,12 +71,17 @@ import com.example.ui.viewmodel.ProfileViewModel
 @Composable
 fun ProfileScreen(
     profileViewModel: ProfileViewModel,
+    isNewUserSetup: Boolean = false,
+    onProfileSavedAndContinue: () -> Unit = {},
+    onSkipProfileSetup: () -> Unit = {},
     onLogout: () -> Unit
 ) {
     val state by profileViewModel.uiState.collectAsState()
     val profile by profileViewModel.profileData.collectAsState()
     val backendStatus by profileViewModel.backendStatus.collectAsState()
     var showBackendDialog by remember { mutableStateOf(false) }
+
+    val showEditForm = isNewUserSetup || state.isEditMode
 
     Column(
         modifier = Modifier
@@ -95,10 +91,22 @@ fun ProfileScreen(
             .testTag("profile_screen")
     ) {
         FixMechanicTopBar(
-            title = "Customer Profile & Settings"
+            title = if (isNewUserSetup) "Complete Your Profile" else "Customer Profile & Settings"
         )
 
         Column(modifier = Modifier.padding(20.dp)) {
+
+            if (isNewUserSetup) {
+                NewUserWelcomeBanner()
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            AnimatedVisibility(visible = state.saveSuccessMessage != null && !showEditForm) {
+                Column {
+                    ProfileSaveSuccessBanner(message = state.saveSuccessMessage ?: "")
+                    Spacer(modifier = Modifier.height(14.dp))
+                }
+            }
 
             // Profile Header Card
             Card(
@@ -108,18 +116,28 @@ fun ProfileScreen(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(18.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val initials = profile.fullName
+                        .trim()
+                        .split(" ")
+                        .filter { it.isNotBlank() }
+                        .take(2)
+                        .joinToString("") { it.take(1).uppercase() }
+                        .ifBlank { "FM" }
+
                     Box(
                         modifier = Modifier
-                            .size(60.dp)
+                            .size(58.dp)
                             .clip(CircleShape)
                             .background(NavyDark),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = profile.fullName.take(2).uppercase(),
+                            text = initials,
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = PureWhite
@@ -127,25 +145,103 @@ fun ProfileScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(16.dp))
+                    Spacer(modifier = Modifier.width(14.dp))
 
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = profile.fullName,
+                            text = profile.fullName.ifBlank { "FixMechanic Customer" },
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
                                 color = NavyDark
                             )
                         )
                         Text(
-                            text = profile.phoneNumber,
+                            text = profile.phoneNumber.ifBlank { "Phone not added yet" },
                             style = MaterialTheme.typography.bodySmall.copy(color = Neutral500)
                         )
-                        Text(
-                            text = profile.email,
-                            style = MaterialTheme.typography.labelSmall.copy(color = Neutral500, fontSize = 11.sp)
-                        )
+                        if (profile.email.isNotBlank()) {
+                            Text(
+                                text = profile.email,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = Neutral500,
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
+                        if (profile.primaryVehicle.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.DirectionsCar,
+                                    contentDescription = null,
+                                    tint = EmergencyOrange,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = profile.primaryVehicle,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = NavyDark,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                )
+                            }
+                        }
                     }
+
+                    if (!isNewUserSetup && !state.isEditMode) {
+                        TextButton(
+                            onClick = { profileViewModel.setEditMode(true) },
+                            modifier = Modifier.testTag("edit_profile_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit Profile",
+                                tint = EmergencyOrange,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Edit",
+                                color = EmergencyOrange,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Inline Profile Editor (auto-opened for new users, or toggled via Edit button)
+            AnimatedVisibility(visible = showEditForm) {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ProfileDetailsEditCard(
+                        profile = profile,
+                        isNewUserSetup = isNewUserSetup,
+                        isSaving = state.isSaving,
+                        errorMessage = state.errorMessage,
+                        onSave = { name, phone, vehicle, sosName, sosPhone ->
+                            profileViewModel.saveProfileDetails(
+                                fullName = name,
+                                phoneNumber = phone,
+                                primaryVehicle = vehicle,
+                                emergencyContactName = sosName,
+                                emergencyContactPhone = sosPhone,
+                                onSaved = {
+                                    if (isNewUserSetup) {
+                                        onProfileSavedAndContinue()
+                                    }
+                                }
+                            )
+                        },
+                        onCancel = {
+                            if (isNewUserSetup) {
+                                onSkipProfileSetup()
+                            } else {
+                                profileViewModel.setEditMode(false)
+                            }
+                        }
+                    )
                 }
             }
 
@@ -267,8 +363,13 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(10.dp))
 
+                    val sosLabel = listOf(
+                        profile.emergencyContactName.takeIf { it.isNotBlank() && it != "Not set" },
+                        profile.emergencyContactPhone.takeIf { it.isNotBlank() }
+                    ).filterNotNull().joinToString(" • ").ifBlank { "Not configured yet — tap Edit above to add" }
+
                     Text(
-                        text = "${profile.emergencyContactName} • ${profile.emergencyContactPhone}",
+                        text = sosLabel,
                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = Neutral800
                     )
@@ -313,7 +414,7 @@ fun ProfileScreen(
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = if (profile.preferredLanguage == "en") Color(0xFFFFECE5) else Color(0xFFF1F5F9),
-                            border = androidx.compose.foundation.BorderStroke(
+                            border = BorderStroke(
                                 1.5.dp,
                                 if (profile.preferredLanguage == "en") EmergencyOrange else Color(0xFFE2E8F0)
                             ),
@@ -337,7 +438,7 @@ fun ProfileScreen(
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = if (profile.preferredLanguage == "hi") Color(0xFFFFECE5) else Color(0xFFF1F5F9),
-                            border = androidx.compose.foundation.BorderStroke(
+                            border = BorderStroke(
                                 1.5.dp,
                                 if (profile.preferredLanguage == "hi") EmergencyOrange else Color(0xFFE2E8F0)
                             ),
@@ -367,7 +468,10 @@ fun ProfileScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { showBackendDialog = true }
+                    .clickable {
+                        profileViewModel.refreshBackendStatus()
+                        showBackendDialog = true
+                    }
                     .testTag("backend_status_inspector_card"),
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = NavySurface)
@@ -425,7 +529,7 @@ fun ProfileScreen(
                     .height(48.dp)
                     .testTag("logout_button"),
                 shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, EmergencyRed),
+                border = BorderStroke(1.dp, EmergencyRed),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = EmergencyRed)
             ) {
                 Icon(
@@ -438,76 +542,10 @@ fun ProfileScreen(
             }
         }
 
-        // BACKEND STATUS MODAL DIALOG
         if (showBackendDialog) {
-            AlertDialog(
-                onDismissRequest = { showBackendDialog = false },
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = WarningAmber
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Backend Integration Report",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                    }
-                },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            text = "Status: ${backendStatus.activeEnvironment}",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
-                        )
-
-                        IntegrationStatusRow(name = "Firebase Authentication", isReady = backendStatus.firebaseAuthAvailable)
-                        IntegrationStatusRow(name = "Cloud Firestore Database", isReady = backendStatus.firestoreAvailable)
-                        IntegrationStatusRow(name = "Firebase Cloud Messaging (FCM)", isReady = backendStatus.fcmAvailable)
-                        IntegrationStatusRow(name = "Live Dispatch REST Backend", isReady = backendStatus.backendApiAvailable)
-
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Architecture Note:\nConnected to shared Firebase project fixmechanic-firebase ((default) database) and Spark Dispatch Server with enforced zero-trust security rules.",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = Neutral500)
-                        )
-                    }
-                },
-                confirmButton = {
-                    Button(
-                        onClick = { showBackendDialog = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = NavyDark)
-                    ) {
-                        Text("Close", color = PureWhite)
-                    }
-                }
-            )
-        }
-    }
-}
-
-@Composable
-fun IntegrationStatusRow(name: String, isReady: Boolean) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(text = name, style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp))
-        Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = if (isReady) Color(0xFFECFDF5) else Color(0xFFFFFBEB)
-        ) {
-            Text(
-                text = if (isReady) "Connected" else "Pending Config",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isReady) SafetyGreen else WarningAmber
-                ),
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            BackendStatusReportDialog(
+                backendStatus = backendStatus,
+                onDismiss = { showBackendDialog = false }
             )
         }
     }

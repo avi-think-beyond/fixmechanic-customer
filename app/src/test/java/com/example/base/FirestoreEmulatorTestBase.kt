@@ -80,7 +80,7 @@ abstract class FirestoreEmulatorTestBase {
 
     protected fun clearEmulators() {
         try {
-            val fsUrl = URL("http://$EMULATOR_HOST:$FIRESTORE_PORT/emulator/v1/projects/$PROJECT_ID/databases/(default)/documents")
+            val fsUrl = URL("http://$EMULATOR_HOST:$FIRESTORE_PORT/emulator/v1/projects/$PROJECT_ID/databases/$databaseId/documents")
             (fsUrl.openConnection() as HttpURLConnection).run {
                 requestMethod = "DELETE"
                 responseCode
@@ -110,7 +110,7 @@ abstract class FirestoreEmulatorTestBase {
 
     protected fun seedFirestoreDocViaRest(collection: String, docId: String, jsonFieldsBody: String) {
         val url = URL(
-            "http://$EMULATOR_HOST:$FIRESTORE_PORT/v1/projects/$PROJECT_ID/databases/(default)/documents/$collection?documentId=$docId"
+            "http://$EMULATOR_HOST:$FIRESTORE_PORT/v1/projects/$PROJECT_ID/databases/$databaseId/documents/$collection?documentId=$docId"
         )
         (url.openConnection() as HttpURLConnection).run {
             requestMethod = "POST"

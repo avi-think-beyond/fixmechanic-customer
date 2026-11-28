@@ -7,6 +7,7 @@ import com.example.data.datasource.ServiceCatalog
 import com.example.data.location.LocationFetchResult
 import com.example.data.location.LocationHelper
 import com.example.data.model.EmergencyRequest
+import com.example.data.model.JobStatus
 import com.example.data.model.LocationData
 import com.example.data.model.Mechanic
 import com.example.data.model.ServiceItem
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -53,8 +55,43 @@ class EmergencyViewModel(
     val requestHistory: StateFlow<List<EmergencyRequest>> = emergencyRepository.requestHistory
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val pendingReviewRequest: StateFlow<EmergencyRequest?> = combine(
+        emergencyRepository.activeRequest,
+        emergencyRepository.requestHistory
+    ) { active, history ->
+        if (active != null && active.status == JobStatus.COMPLETED && active.ratingGiven == null) {
+            active
+        } else {
+            history.firstOrNull { it.status == JobStatus.COMPLETED && it.ratingGiven == null }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val nearbyMechanics: StateFlow<List<Mechanic>> = emergencyRepository.nearbyMechanics
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun startNewEmergencyFlow(type: VehicleType) {
+        val newDefaultService = ServiceCatalog.getServices(type).firstOrNull()
+        _uiState.value = EmergencyUiState(
+            selectedVehicleType = type,
+            selectedService = newDefaultService,
+            vehicleMakeModel = if (type == VehicleType.BIKE) "Royal Enfield Classic 350" else "Maruti Suzuki Swift Dzire",
+            isLocationPermissionGranted = _uiState.value.isLocationPermissionGranted
+        )
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(errorMessage = null, locationErrorMessage = null) }
+    }
+
+    fun refreshSession() {
+        _uiState.update { it.copy(errorMessage = null) }
+        emergencyRepository.refreshSession()
+    }
+
+    fun resetForLogout() {
+        emergencyRepository.clearSession()
+        _uiState.value = EmergencyUiState()
+    }
 
     fun selectVehicleType(type: VehicleType) {
         val newDefaultService = ServiceCatalog.getServices(type).firstOrNull()
@@ -130,6 +167,18 @@ class EmergencyViewModel(
                     }
                 }
             }
+        }
+    }
+
+    fun setConfirmedLocation(location: LocationData) {
+        _uiState.update {
+            it.copy(
+                location = location,
+                isLocationLoading = false,
+                isManualLocationMode = false,
+                locationErrorMessage = null,
+                errorMessage = null
+            )
         }
     }
 
@@ -245,16 +294,31 @@ class EmergencyViewModel(
 
     fun cancelActiveRequest(onCancelled: () -> Unit) {
         viewModelScope.launch {
-            emergencyRepository.cancelActiveRequest().onSuccess {
+            _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+            val result = emergencyRepository.cancelActiveRequest()
+            _uiState.update { it.copy(isSubmitting = false) }
+            result.onSuccess {
                 onCancelled()
+            }.onFailure { err ->
+                _uiState.update { it.copy(errorMessage = err.message ?: "Failed to cancel emergency request") }
             }
         }
     }
 
-    fun submitRating(rating: Float, comment: String, onFinished: () -> Unit) {
+    fun submitRating(
+        rating: Float,
+        comment: String,
+        paymentMethod: String = "UPI",
+        onFinished: () -> Unit
+    ) {
         viewModelScope.launch {
-            emergencyRepository.completeJob(rating, comment).onSuccess {
+            _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+            val result = emergencyRepository.completeJob(rating, comment, paymentMethod)
+            _uiState.update { it.copy(isSubmitting = false) }
+            result.onSuccess {
                 onFinished()
+            }.onFailure { err ->
+                _uiState.update { it.copy(errorMessage = err.message ?: "Failed to submit feedback") }
             }
         }
     }

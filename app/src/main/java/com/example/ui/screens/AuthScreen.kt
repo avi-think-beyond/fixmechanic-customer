@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.data.FirestoreProvider
 import com.example.ui.components.FixMechanicTopBar
 import com.example.ui.theme.EmergencyOrange
 import com.example.ui.theme.EmergencyRed
@@ -62,6 +64,7 @@ import com.example.ui.theme.Neutral500
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.SafetyGreen
 import com.example.ui.viewmodel.AuthViewModel
+import com.google.firebase.FirebaseApp
 
 @Composable
 fun AuthScreen(
@@ -70,6 +73,10 @@ fun AuthScreen(
 ) {
     val state by authViewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        authViewModel.checkPendingSignIn()
+    }
 
     LaunchedEffect(state.isVerified) {
         if (state.isVerified) {
@@ -145,25 +152,46 @@ fun AuthScreen(
                         contentColor = PureWhite
                     )
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "G",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Black,
-                                color = EmergencyOrange
+                    if (state.isLoading) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = EmergencyOrange,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.5.dp
                             )
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "Continue with Google",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = PureWhite
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Signing in...",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
                             )
-                        )
+                        }
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "G",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Black,
+                                    color = EmergencyOrange
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Continue with Google",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = PureWhite
+                                )
+                            )
+                        }
                     }
                 }
 
@@ -329,31 +357,57 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9))
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9))
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Security,
-                        contentDescription = "Privacy Shield",
-                        tint = SafetyGreen,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = stringResource(id = R.string.privacy_note),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 12.sp,
-                            color = Neutral500,
-                            lineHeight = 16.sp
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = "Privacy Shield",
+                            tint = SafetyGreen,
+                            modifier = Modifier.size(20.dp)
                         )
-                    )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = stringResource(id = R.string.privacy_note),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 12.sp,
+                                color = Neutral500,
+                                lineHeight = 16.sp
+                            )
+                        )
+                    }
                 }
+
+                val runtimeProjectId = remember {
+                    runCatching { FirebaseApp.getInstance().options.projectId }.getOrNull().orEmpty().ifBlank { "not-initialized" }
+                }
+                val runtimeDbId = remember(context) {
+                    FirestoreProvider.getDatabaseId(context)
+                }
+                val isExpectedProject = runtimeProjectId == "fixmechanic-firebase"
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = "Firebase: $runtimeProjectId • DB: $runtimeDbId • ${context.packageName}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        color = if (isExpectedProject) Neutral500 else EmergencyRed,
+                        fontWeight = if (isExpectedProject) FontWeight.Normal else FontWeight.Bold
+                    ),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .testTag("firebase_runtime_project_info")
+                )
             }
         }
     }

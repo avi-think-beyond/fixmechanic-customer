@@ -27,7 +27,9 @@ object FirestoreProvider {
         } else {
             FirebaseFirestore.getInstance(dbId)
         }
-        if (isTestOrEmulator) {
+        // Use in-memory cache so signing out and switching accounts can never surface
+        // stale disk-persisted documents belonging to a previous user.
+        runCatching {
             db.firestoreSettings = FirebaseFirestoreSettings.Builder()
                 .setLocalCacheSettings(MemoryCacheSettings.newBuilder().build())
                 .build()

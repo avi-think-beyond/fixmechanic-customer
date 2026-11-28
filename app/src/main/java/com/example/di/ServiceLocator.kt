@@ -48,7 +48,11 @@ object ServiceLocator {
     }
 
     val authRepository: AuthRepository by lazy {
-        FirebaseAuthRepository(firestoreDb, firebaseAuth)
+        FirebaseAuthRepository(
+            db = firestoreDb,
+            auth = firebaseAuth,
+            onSessionCleared = { clearAllUserSessions() }
+        )
     }
 
     val emergencyRepository: EmergencyRepository by lazy {
@@ -69,5 +73,13 @@ object ServiceLocator {
 
     val aiDiagnosisRepository: AiDiagnosisRepository by lazy {
         GeminiAiAssistantRepository(RuleBasedAiDiagnosisRepository())
+    }
+
+    fun clearAllUserSessions() {
+        if (appContext == null) return
+        runCatching { emergencyRepository.clearSession() }
+        runCatching { chatRepository.clearSession() }
+        runCatching { profileRepository.clearSession() }
+        runCatching { backendStatusRepository.clearSession() }
     }
 }

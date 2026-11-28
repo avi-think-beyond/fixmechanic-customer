@@ -19,6 +19,10 @@ data class UserProfileData(
 interface ProfileRepository {
     val profile: StateFlow<UserProfileData>
     fun updateProfile(profile: UserProfileData)
+    suspend fun saveProfile(profile: UserProfileData): Result<Unit> {
+        updateProfile(profile)
+        return Result.success(Unit)
+    }
     fun toggleNumberMasking(enabled: Boolean)
     fun toggleGpsSharing(enabled: Boolean)
     fun setLanguage(langCode: String)

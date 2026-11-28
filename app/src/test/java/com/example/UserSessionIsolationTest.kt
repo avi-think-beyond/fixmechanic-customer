@@ -1,6 +1,5 @@
 package com.example
 
-import com.example.data.datasource.ServiceCatalog
 import com.example.data.model.BackendIntegrationStatus
 import com.example.data.model.ChatMessage
 import com.example.data.model.EmergencyRequest
@@ -14,7 +13,6 @@ import com.example.data.repository.BackendStatusRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.EmergencyRepository
 import com.example.data.repository.ProfileRepository
-import com.example.data.repository.PrototypeProfileRepository
 import com.example.data.repository.UserProfileData
 import com.example.ui.viewmodel.AiDiagnosisViewModel
 import com.example.ui.viewmodel.AuthViewModel
@@ -84,11 +82,15 @@ class UserSessionIsolationTest {
 
         // User A fills breakdown details and creates an emergency request + chat message
         emergencyViewModel.startNewEmergencyFlow(VehicleType.CAR)
-        emergencyViewModel.onManualStateChanged("Maharashtra")
-        emergencyViewModel.onManualPincodeChanged("400001")
-        emergencyViewModel.onManualCityChanged("Mumbai")
-        emergencyViewModel.onManualAddressChanged("Alice Private Address, Marine Drive")
-        emergencyViewModel.saveManualLocation(null)
+        emergencyViewModel.setConfirmedLocation(
+            LocationData(
+                latitude = 18.9432,
+                longitude = 72.8235,
+                address = "Alice Private Address, Marine Drive",
+                city = "Mumbai",
+                isObtained = true
+            )
+        )
         emergencyViewModel.updateVehicleDetails(
             makeModel = "Alice's Honda City",
             regNo = "MH 01 AL 0001",
@@ -151,11 +153,15 @@ class UserSessionIsolationTest {
 
         // 4. User B creates their own service request and sees ONLY User B's record
         emergencyViewModel.startNewEmergencyFlow(VehicleType.BIKE)
-        emergencyViewModel.onManualStateChanged("Delhi")
-        emergencyViewModel.onManualPincodeChanged("110001")
-        emergencyViewModel.onManualCityChanged("New Delhi")
-        emergencyViewModel.onManualAddressChanged("Bob Connaught Place")
-        emergencyViewModel.saveManualLocation(null)
+        emergencyViewModel.setConfirmedLocation(
+            LocationData(
+                latitude = 28.6315,
+                longitude = 77.2167,
+                address = "Bob Connaught Place",
+                city = "New Delhi",
+                isObtained = true
+            )
+        )
         var bobReqId: String? = null
         emergencyViewModel.submitEmergencyRequest { bobReqId = it }
         advanceUntilIdle()
@@ -198,12 +204,9 @@ class UserSessionIsolationTest {
         val sessionStore = MultiAccountFakeBackend()
         val authViewModel = AuthViewModel(sessionStore.authRepo)
 
-        authViewModel.onPhoneChanged("9876543210")
-        authViewModel.sendOtp()
-        advanceUntilIdle()
-        val otp = authViewModel.uiState.value.generatedOtp!!
-        authViewModel.onOtpChanged(otp)
-        authViewModel.verifyOtp()
+        authViewModel.onEmailChanged("alice@example.com")
+        authViewModel.onPasswordChanged("password123")
+        authViewModel.submitEmailAuth()
         advanceUntilIdle()
 
         assertTrue(authViewModel.uiState.value.isVerified)
@@ -211,13 +214,89 @@ class UserSessionIsolationTest {
         // Immediately after calling logout(), before any coroutine completes, isVerified must already be false
         authViewModel.logout(null)
         assertFalse(authViewModel.uiState.value.isVerified)
+        assertFalse(authViewModel.uiState.value.isNewUser)
         advanceUntilIdle()
         assertFalse(authViewModel.uiState.value.isVerified)
     }
 
-    /**
-     * Simulates an authenticated multi-tenant backend + client repository layer enforcing uid ownership.
-     */
+    @Test
+    fun authViewModel_newUserRoutesToProfile_andExistingUserRoutesToHome() = runTest {
+        val sessionStore = MultiAccountFakeBackend()
+        val authViewModel = AuthViewModel(sessionStore.authRepo)
+
+        // New user registration -> isNewUser = true (Profile screen)
+        authViewModel.toggleRegisterMode()
+        authViewModel.onNameChanged("New Driver")
+        authViewModel.onEmailChanged("newdriver@example.com")
+        authViewModel.onPasswordChanged("secret123")
+        authViewModel.submitEmailAuth()
+        advanceUntilIdle()
+
+        assertTrue(authViewModel.uiState.value.isVerified)
+        assertTrue(authViewModel.uiState.value.isNewUser)
+
+        // After user completes/skips profile setup -> isNewUser cleared
+        authViewModel.consumeNewUserProfilePrompt()
+        advanceUntilIdle()
+        assertFalse(authViewModel.uiState.value.isNewUser)
+
+        // Logout then log in as existing user -> isNewUser = false (Home screen)
+        authViewModel.logout(null)
+        advanceUntilIdle()
+        authViewModel.onEmailChanged("existing@example.com")
+        authViewModel.onPasswordChanged("secret123")
+        authViewModel.submitEmailAuth()
+        advanceUntilIdle()
+
+        assertTrue(authViewModel.uiState.value.isVerified)
+        assertFalse(authViewModel.uiState.value.isNewUser)
+    }
+
+    @Test
+    fun profileViewModel_saveProfileDetailsPersistsAndInvokesCallback() = runTest {
+        val sessionStore = MultiAccountFakeBackend()
+        sessionStore.signInAs("user_new", "New User", "new@example.com")
+        val profileViewModel = ProfileViewModel(sessionStore.profileRepo, sessionStore.statusRepo)
+        val collector = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            profileViewModel.profileData.collect()
+        }
+
+        // Blank name should be rejected
+        var savedCallbackCount = 0
+        profileViewModel.saveProfileDetails(
+            fullName = "   ",
+            phoneNumber = "+919876543210",
+            primaryVehicle = "Honda City",
+            emergencyContactName = "Mom",
+            emergencyContactPhone = "+919800000000",
+            onSaved = { savedCallbackCount++ }
+        )
+        advanceUntilIdle()
+        assertNotNull(profileViewModel.uiState.value.errorMessage)
+        assertEquals(0, savedCallbackCount)
+
+        // Valid details should save and fire callback
+        profileViewModel.saveProfileDetails(
+            fullName = "Rohan Sharma",
+            phoneNumber = "+919876543210",
+            primaryVehicle = "Honda City ZX",
+            emergencyContactName = "Priya Sharma",
+            emergencyContactPhone = "+919800000000",
+            onSaved = { savedCallbackCount++ }
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, savedCallbackCount)
+        assertNull(profileViewModel.uiState.value.errorMessage)
+        assertEquals("Rohan Sharma", profileViewModel.profileData.value.fullName)
+        assertEquals("+919876543210", profileViewModel.profileData.value.phoneNumber)
+        assertEquals("Honda City ZX", profileViewModel.profileData.value.primaryVehicle)
+        assertEquals("Priya Sharma", profileViewModel.profileData.value.emergencyContactName)
+        assertEquals("+919800000000", profileViewModel.profileData.value.emergencyContactPhone)
+
+        collector.cancel()
+    }
+
     private class MultiAccountFakeBackend {
         var currentUid: String? = null
             private set
@@ -227,10 +306,8 @@ class UserSessionIsolationTest {
         private val serverProfilesByUid = mutableMapOf<String, UserProfileData>()
 
         private val _activeRequest = MutableStateFlow<EmergencyRequest?>(null)
-        private val _pendingReview = MutableStateFlow<EmergencyRequest?>(null)
         private val _history = MutableStateFlow<List<EmergencyRequest>>(emptyList())
         private val _nearby = MutableStateFlow<List<Mechanic>>(emptyList())
-        private val _loadingNearby = MutableStateFlow(false)
 
         private val chatFlows = mutableMapOf<String, MutableStateFlow<List<ChatMessage>>>()
         private val _profile = MutableStateFlow(UserProfileData())
@@ -241,26 +318,48 @@ class UserSessionIsolationTest {
             override val authState: StateFlow<AuthState> = _authState.asStateFlow()
             private val _loggedIn = MutableStateFlow(false)
             override val isLoggedInFlow: StateFlow<Boolean> = _loggedIn.asStateFlow()
+            private val _isNewUser = MutableStateFlow(false)
+            override val isNewUserSession: StateFlow<Boolean> = _isNewUser.asStateFlow()
             private val _phone = MutableStateFlow<String?>(null)
             override val currentUserPhone: StateFlow<String?> = _phone.asStateFlow()
             override val isDemoMode: Boolean = false
-            private var otp: String? = null
 
-            override suspend fun signInWithGoogle(idToken: String): Result<Unit> = Result.success(Unit)
-            override suspend fun requestOtp(phoneNumber: String): Result<String> {
-                otp = "123456"
-                _authState.value = AuthState.OtpSent(phoneNumber, System.currentTimeMillis() + 60_000L)
-                return Result.success("123456")
+            override suspend fun signInWithGoogle(idToken: String): Result<Unit> {
+                _isNewUser.value = false
+                _loggedIn.value = true
+                _authState.value = AuthState.Authenticated("google_user", false)
+                return Result.success(Unit)
             }
 
-            override suspend fun verifyOtp(phoneNumber: String, otpCode: String): Result<Boolean> {
+            override suspend fun signInWithEmail(email: String, password: String): Result<Unit> {
+                _isNewUser.value = false
                 _loggedIn.value = true
-                _authState.value = AuthState.Authenticated(phoneNumber, false)
-                return Result.success(true)
+                _phone.value = email
+                _authState.value = AuthState.Authenticated(email, false)
+                return Result.success(Unit)
+            }
+
+            override suspend fun registerWithEmail(name: String, email: String, password: String): Result<Unit> {
+                _isNewUser.value = true
+                _loggedIn.value = true
+                _phone.value = email
+                _authState.value = AuthState.Authenticated(email, false)
+                return Result.success(Unit)
+            }
+
+            override suspend fun requestOtp(phoneNumber: String): Result<String> =
+                Result.failure(UnsupportedOperationException("Spark plan"))
+
+            override suspend fun verifyOtp(phoneNumber: String, otpCode: String): Result<Boolean> =
+                Result.failure(UnsupportedOperationException("Spark plan"))
+
+            override fun markProfileSetupCompleted() {
+                _isNewUser.value = false
             }
 
             override suspend fun logout() {
                 currentUid = null
+                _isNewUser.value = false
                 _loggedIn.value = false
                 _phone.value = null
                 _authState.value = AuthState.Unauthenticated
@@ -272,17 +371,15 @@ class UserSessionIsolationTest {
 
         val emergencyRepo = object : EmergencyRepository {
             override val activeRequest: StateFlow<EmergencyRequest?> = _activeRequest.asStateFlow()
-            override val pendingReviewRequest: StateFlow<EmergencyRequest?> = _pendingReview.asStateFlow()
             override val requestHistory: StateFlow<List<EmergencyRequest>> = _history.asStateFlow()
             override val nearbyMechanics: StateFlow<List<Mechanic>> = _nearby.asStateFlow()
-            override val isLoadingNearbyMechanics: StateFlow<Boolean> = _loadingNearby.asStateFlow()
             override val isDemoMode: Boolean = false
             private var counter = 0
 
             override suspend fun submitEmergencyRequest(request: EmergencyRequest): Result<EmergencyRequest> {
                 val uid = currentUid ?: return Result.failure(IllegalStateException("Unauthenticated"))
                 counter++
-                val created = request.copy(id = "REQ_${uid}_$counter", status = JobStatus.REQUESTED)
+                val created = request.copy(id = "REQ_${uid}_$counter", status = JobStatus.SEARCHING)
                 serverRequestsByUid.getOrPut(uid) { mutableListOf() }.add(0, created)
                 serverChatsByJobId[created.id] = uid to mutableListOf()
                 syncForUid(uid)
@@ -291,14 +388,12 @@ class UserSessionIsolationTest {
 
             override suspend fun cancelActiveRequest(): Result<Unit> = Result.success(Unit)
             override suspend fun retrySearch(): Result<Unit> = Result.success(Unit)
-            override suspend fun transitionJobStatus(nextStatus: JobStatus) = Unit
-            override suspend fun completeJob(rating: Float, comment: String, paymentMethod: String): Result<Unit> = Result.success(Unit)
-            override fun observeNearbyMechanics(latitude: Double, longitude: Double, radiusKm: Double) = Unit
-            override fun stopObservingNearbyMechanics() = Unit
+            override suspend fun triggerOfferExpiryCheck(): Result<Unit> = Result.success(Unit)
+            override suspend fun completeJob(rating: Float, comment: String, paymentMethod: String): Result<Unit> =
+                Result.success(Unit)
 
             override fun clearSession() {
                 _activeRequest.value = null
-                _pendingReview.value = null
                 _history.value = emptyList()
                 _nearby.value = emptyList()
             }

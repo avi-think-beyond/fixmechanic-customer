@@ -1,7 +1,10 @@
 package com.example.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -39,6 +42,9 @@ fun AppNavHost(
     aiViewModel: AiDiagnosisViewModel = viewModel(),
     profileViewModel: ProfileViewModel = viewModel()
 ) {
+    val context = LocalContext.current
+    val authState by authViewModel.uiState.collectAsState()
+
     NavHost(
         navController = navController,
         startDestination = Screen.Splash.route,
@@ -47,7 +53,12 @@ fun AppNavHost(
         composable(Screen.Splash.route) {
             SplashScreen(
                 onSplashFinished = {
-                    navController.navigate(Screen.Onboarding.route) {
+                    val destination = if (authViewModel.uiState.value.isVerified) {
+                        Screen.Main.route
+                    } else {
+                        Screen.Onboarding.route
+                    }
+                    navController.navigate(destination) {
                         popUpTo(Screen.Splash.route) { inclusive = true }
                     }
                 }
@@ -70,6 +81,7 @@ fun AppNavHost(
                 onLoginSuccess = {
                     navController.navigate(Screen.Main.route) {
                         popUpTo(Screen.Auth.route) { inclusive = true }
+                        launchSingleTop = true
                     }
                 }
             )
@@ -79,8 +91,12 @@ fun AppNavHost(
             MainScreen(
                 emergencyViewModel = emergencyViewModel,
                 profileViewModel = profileViewModel,
+                openProfileForNewUser = authState.isNewUser,
+                onProfileSetupCompleted = {
+                    authViewModel.consumeNewUserProfilePrompt()
+                },
                 onStartEmergency = { vehicleType ->
-                    emergencyViewModel.selectVehicleType(vehicleType)
+                    emergencyViewModel.startNewEmergencyFlow(vehicleType)
                     navController.navigate(Screen.VehicleSelect.route)
                 },
                 onOpenActiveJob = {
@@ -93,9 +109,14 @@ fun AppNavHost(
                     // Handled inside Profile tab dialog or direct navigation
                 },
                 onLogout = {
-                    authViewModel.logout()
+                    emergencyViewModel.resetForLogout()
+                    chatViewModel.resetForLogout()
+                    aiViewModel.clear()
+                    profileViewModel.resetForLogout()
+                    authViewModel.logout(context)
                     navController.navigate(Screen.Auth.route) {
-                        popUpTo(Screen.Main.route) { inclusive = true }
+                        popUpTo(0) { inclusive = true }
+                        launchSingleTop = true
                     }
                 }
             )
@@ -148,6 +169,7 @@ fun AppNavHost(
         composable(Screen.RequestSummary.route) {
             RequestSummaryScreen(
                 emergencyViewModel = emergencyViewModel,
+                authViewModel = authViewModel,
                 onBackClick = { navController.popBackStack() },
                 onConfirmedDispatched = { _ ->
                     navController.navigate(Screen.SearchingMechanic.route) {
@@ -203,6 +225,7 @@ fun AppNavHost(
         composable(Screen.JobCompletion.route) {
             JobCompletionScreen(
                 emergencyViewModel = emergencyViewModel,
+                authViewModel = authViewModel,
                 onFinished = {
                     navController.navigate(Screen.Main.route) {
                         popUpTo(Screen.Main.route) { inclusive = true }
